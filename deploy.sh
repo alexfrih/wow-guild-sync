@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 🚀 WoW Guild Sync - Zero-Downtime Deployment Script
+# 🚀 WoW Guild Sync - Simple Deployment Script
 
 set -e
 
@@ -14,19 +14,19 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    printf "${BLUE}[INFO]${NC} $1\n"
 }
 
 print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    printf "${GREEN}[SUCCESS]${NC} $1\n"
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    printf "${YELLOW}[WARNING]${NC} $1\n"
 }
 
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    printf "${RED}[ERROR]${NC} $1\n"
 }
 
 # Check if .env file exists
@@ -83,57 +83,17 @@ npm run build
 cd ../..
 print_success "Frontend built"
 
-# Zero-downtime rolling deployment
-print_status "Performing zero-downtime deployment..."
-
-# Check if service is currently running
-CURRENT_RUNNING=$(docker ps -q -f name=wow-guild-sync 2>/dev/null || echo "")
-
-if [ -n "$CURRENT_RUNNING" ]; then
-    print_status "Service currently running, performing rolling update..."
-    
-    # Build new image
-    docker compose build --no-cache
-    
-    # Start new container alongside old one
-    docker compose up -d --no-deps --scale guild-sync=2 guild-sync
-    
-    # Wait for new container to be healthy
-    print_status "Waiting for new container to be healthy..."
-    sleep 15
-    
-    # Health check on the service
-    if curl -f -s http://localhost:3001/health > /dev/null 2>&1; then
-        print_success "New container is healthy"
-        
-        # Scale back to 1 (removes old container)
-        docker compose up -d --no-deps --scale guild-sync=1 guild-sync
-        
-        # Remove any orphaned containers
-        docker compose down --remove-orphans
-        
-        # Start final clean deployment
-        docker compose up -d
-        
-    else
-        print_error "New container failed health check, rolling back..."
-        docker compose down
-        docker compose up -d
-        exit 1
-    fi
-else
-    print_status "No running service found, starting fresh..."
-    docker compose up --build -d
-fi
-
+# Simple deployment with minimal downtime
+print_status "Deploying containers..."
+docker compose up --build -d --force-recreate --remove-orphans
 print_success "Deployment completed"
 
 # Wait for services to be ready
 print_status "Waiting for services to start..."
-sleep 10
+sleep 15
 
-# Final health check
-print_status "Performing final health check..."
+# Health check
+print_status "Performing health check..."
 MAX_RETRIES=30
 RETRY_COUNT=0
 
@@ -150,7 +110,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         exit 1
     fi
     
-    echo -n "."
+    printf "."
     sleep 2
 done
 
