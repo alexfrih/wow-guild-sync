@@ -22,10 +22,10 @@ class GuildSyncService {
     };
 
     // Initialize services
-    this.db = new DatabaseService(config.database);
-    this.guildDiscovery = new GuildDiscoveryService(config.guild);
-    this.playerSync = new PlayerSyncService(config);
-    this.webApi = new WebApiService(config.webApi);
+    this.db = new DatabaseService(config);
+    this.guildDiscovery = new GuildDiscoveryService(config, Logger);
+    this.playerSync = new PlayerSyncService(config, Logger);
+    this.webApi = new WebApiService(config, Logger);
 
     // Cron jobs
     this.discoveryJob = null;
