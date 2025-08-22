@@ -59,15 +59,52 @@ class PlayerSyncService {
       let mythicPlusScore = 0;
       
       try {
-        // Get mythic+ data with additional rate limiting
-        await this.sleep(1000);
-        const mythicResponse = await axios.get(`${baseUrl}/mythic-keystone-profile?namespace=profile-${region}&locale=en_US`, {
+        // First get the current season ID
+        const currentSeasonResponse = await axios.get(`https://${region}.api.blizzard.com/data/wow/mythic-keystone/season/index?namespace=dynamic-${region}&locale=en_US`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
         });
         
-        mythicPlusScore = Math.round(mythicResponse.data.current_mythic_rating?.rating || 0);
+        const currentSeasonId = currentSeasonResponse.data.current_season?.id;
+        this.logger.debug(`Current M+ season: ${currentSeasonId}`);
+        
+        // Get mythic+ data with additional rate limiting
+        await this.sleep(1000);
+        
+        // Try current season first
+        if (currentSeasonId) {
+          try {
+            const currentSeasonResponse = await axios.get(`${baseUrl}/mythic-keystone-profile/season/${currentSeasonId}?namespace=profile-${region}&locale=en_US`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            // Calculate total rating from best runs in current season
+            const bestRuns = currentSeasonResponse.data.best_runs || [];
+            if (bestRuns.length > 0) {
+              // Sum up all the map ratings for current season
+              const totalRating = bestRuns.reduce((sum, run) => sum + (run.map_rating?.rating || 0), 0);
+              mythicPlusScore = Math.round(totalRating);
+              this.logger.debug(`M+ for ${name}: Current season ${currentSeasonId}, Rating: ${mythicPlusScore} (${bestRuns.length} runs)`);
+            }
+          } catch (currentSeasonError) {
+            this.logger.debug(`No current season data for ${name}, falling back to overall profile`);
+          }
+        }
+        
+        // Fallback to overall profile if no current season data
+        if (mythicPlusScore === 0) {
+          const mythicResponse = await axios.get(`${baseUrl}/mythic-keystone-profile?namespace=profile-${region}&locale=en_US`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          mythicPlusScore = Math.round(mythicResponse.data.current_mythic_rating?.rating || 0);
+          this.logger.debug(`M+ for ${name}: Fallback rating: ${mythicPlusScore}`);
+        }
       } catch (mythicError) {
         // M+ data might not be available for all characters
         this.logger.debug(`No M+ data for ${name}: ${mythicError.message}`);
