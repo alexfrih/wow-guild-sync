@@ -59,51 +59,46 @@ class PlayerSyncService {
       let mythicPlusScore = 0;
       
       try {
-        // First get the current season ID
-        const currentSeasonResponse = await axios.get(`https://${region}.api.blizzard.com/data/wow/mythic-keystone/season/index?namespace=dynamic-${region}&locale=en_US`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        const currentSeasonId = currentSeasonResponse.data.current_season?.id;
-        this.logger.debug(`Current M+ season: ${currentSeasonId}`);
-        
-        // Get mythic+ data with additional rate limiting
-        await this.sleep(1000);
-        
-        // Try current season first
-        if (currentSeasonId) {
-          try {
-            const currentSeasonResponse = await axios.get(`${baseUrl}/mythic-keystone-profile/season/${currentSeasonId}?namespace=profile-${region}&locale=en_US`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-            
-            // Calculate total rating from best runs in current season
-            const bestRuns = currentSeasonResponse.data.best_runs || [];
-            if (bestRuns.length > 0) {
-              // Sum up all the map ratings for current season
-              const totalRating = bestRuns.reduce((sum, run) => sum + (run.map_rating?.rating || 0), 0);
-              mythicPlusScore = Math.round(totalRating);
-              this.logger.debug(`M+ for ${name}: Current season ${currentSeasonId}, Rating: ${mythicPlusScore} (${bestRuns.length} runs)`);
+        // Cache current season ID globally to avoid repeated API calls
+        if (!global.currentMythicSeasonId) {
+          const currentSeasonResponse = await axios.get(`https://${region}.api.blizzard.com/data/wow/mythic-keystone/season/index?namespace=dynamic-${region}&locale=en_US`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
             }
-          } catch (currentSeasonError) {
-            this.logger.debug(`No current season data for ${name}, falling back to overall profile`);
-          }
+          });
+          global.currentMythicSeasonId = currentSeasonResponse.data.current_season?.id || 15;
+          this.logger.info(`Cached current M+ season: ${global.currentMythicSeasonId}`);
         }
         
-        // Fallback to overall profile if no current season data
-        if (mythicPlusScore === 0) {
+        // Get mythic+ data with minimal rate limiting  
+        await this.sleep(500); // Reduced from 1000ms
+        
+        // Try current season directly (Season 15 hardcoded for performance)
+        try {
+          const currentSeasonResponse = await axios.get(`${baseUrl}/mythic-keystone-profile/season/15?namespace=profile-${region}&locale=en_US`, {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          
+          // Calculate total rating from best runs in current season
+          const bestRuns = currentSeasonResponse.data.best_runs || [];
+          if (bestRuns.length > 0) {
+            const totalRating = bestRuns.reduce((sum, run) => sum + (run.map_rating?.rating || 0), 0);
+            mythicPlusScore = Math.round(totalRating);
+          }
+        } catch (currentSeasonError) {
+          // Fallback to overall profile for inactive players
           const mythicResponse = await axios.get(`${baseUrl}/mythic-keystone-profile?namespace=profile-${region}&locale=en_US`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
           });
           
-          mythicPlusScore = Math.round(mythicResponse.data.current_mythic_rating?.rating || 0);
-          this.logger.debug(`M+ for ${name}: Fallback rating: ${mythicPlusScore}`);
+          // Check if current_mythic_rating is from current season, otherwise use 0
+          const currentRating = mythicResponse.data.current_mythic_rating?.rating || 0;
+          // If rating is very high (2000+), it's likely old season data, reset to 0
+          mythicPlusScore = currentRating > 2000 ? 0 : Math.round(currentRating);
         }
       } catch (mythicError) {
         // M+ data might not be available for all characters
@@ -157,9 +152,9 @@ class PlayerSyncService {
       const batchResults = await Promise.allSettled(batchPromises);
       results.push(...batchResults.map(r => r.value).filter(Boolean));
       
-      // Rate limiting between batches
+      // Faster rate limiting between batches
       if (i + batchSize < players.length) {
-        await this.sleep(this.config.guild.rateLimit.blizzard);
+        await this.sleep(5000); // 5 seconds instead of 1.5 seconds
       }
     }
     

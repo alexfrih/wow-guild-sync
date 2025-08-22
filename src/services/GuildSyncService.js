@@ -44,12 +44,16 @@ class GuildSyncService {
       await this.db.cleanupDuplicates();
       Logger.info('🧹 Cleaned up duplicate entries');
 
-      // Initial guild discovery
-      await this.discoverGuildMembers();
-
-      // Run one initial player sync to start populating data
-      Logger.info('🔄 Running initial player sync...');
-      await this.processPlayerSync();
+      // Fast startup: check if we have data
+      const memberCount = await this.db.getMemberCount();
+      if (memberCount === 0) {
+        Logger.info('🔍 No existing members, running initial guild discovery...');
+        await this.discoverGuildMembers();
+        Logger.info('🔄 Running initial player sync...');
+        await this.processPlayerSync();
+      } else {
+        Logger.info(`🏰 Found ${memberCount} existing members, ready immediately!`);
+      }
 
       // Schedule guild discovery (every 6 hours by default)
       this.scheduleGuildDiscovery();

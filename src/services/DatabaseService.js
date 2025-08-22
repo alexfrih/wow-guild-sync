@@ -205,6 +205,11 @@ class DatabaseService {
     // For now, just log - we're using a simple approach without job tracking
     return Promise.resolve();
   }
+
+  async getMemberCount() {
+    const result = await this.db.get('SELECT COUNT(*) as count FROM guild_members');
+    return result.count;
+  }
 }
 
 module.exports = DatabaseService;

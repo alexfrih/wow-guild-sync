@@ -6,11 +6,11 @@ const config = {
     realm: process.env.GUILD_REALM || '',
     region: process.env.GUILD_REGION || '',
     syncIntervalMinutes: 30,
+    fastStartup: true, // Enable fast startup mode
     discoveryIntervalHours: 6,
     rateLimit: {
-      raiderIO: 2000,
-      blizzard: 3000,
-      batchSize: 10
+      blizzard: 1500, // Only Blizzard API used for character sync
+      batchSize: 40   // Increased batch size significantly
     }
   },
 
