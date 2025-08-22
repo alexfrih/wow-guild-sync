@@ -85,9 +85,9 @@ npm run build
 cd ../..
 print_success "Frontend built"
 
-# Stop existing containers gracefully
+# Stop existing containers gracefully (preserve volumes)
 print_status "Stopping existing containers..."
-docker compose down --remove-orphans
+docker compose down
 print_success "Containers stopped"
 
 # Build and start new containers

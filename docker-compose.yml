@@ -112,10 +112,6 @@ services:
 volumes:
   guild_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data
   
   # prometheus_data:
   #   driver: local
