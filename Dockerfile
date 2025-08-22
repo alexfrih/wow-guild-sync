@@ -2,7 +2,7 @@
 # Multi-stage Docker build for optimal size and security
 
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Install build dependencies for native modules (sqlite3)
 RUN apk add --no-cache python3 make g++ sqlite
@@ -13,10 +13,10 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN npm install --production
 
 # Runtime stage  
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 
 # Install runtime dependencies
 RUN apk add --no-cache sqlite tini

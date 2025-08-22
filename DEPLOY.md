@@ -1,80 +1,68 @@
-# 🚀 WoW Guild Sync - Deployment Guide
+# WoW Guild Sync - Production Deployment
 
-## Quick Deployment (VPS)
-
-After `git pull`, run this single command to deploy everything automatically:
+## Quick Deploy
 
 ```bash
 ./deploy.sh
 ```
 
-That's it! The script will:
-- ✅ Validate environment configuration
-- ✅ Backup existing database
-- ✅ Build React frontend with Vite
-- ✅ Rebuild Docker containers
-- ✅ Perform health checks
-- ✅ Show service status and URLs
+Done. The script handles everything automatically.
 
 ## First Time Setup
 
-1. **Clone repository:**
+1. **Clone and configure:**
    ```bash
    git clone https://github.com/alexfrih/wow-guild-sync.git
    cd wow-guild-sync
-   ```
-
-2. **Create environment file:**
-   ```bash
    cp .env.example .env
-   nano .env
    ```
 
-3. **Configure your guild:**
+2. **Edit .env with your guild info:**
    ```env
-   GUILD_NAME=Pool Party
-   GUILD_REALM=Archimonde
-   GUILD_REGION=eu
-   BLIZZARD_CLIENT_ID=your_client_id_here
-   BLIZZARD_CLIENT_SECRET=your_client_secret_here
+   GUILD_NAME=Your Guild Name
+   GUILD_REALM=your-server-name
+   GUILD_REGION=us
+   BLIZZARD_CLIENT_ID=your_client_id
+   BLIZZARD_CLIENT_SECRET=your_client_secret
    ```
 
-4. **Deploy:**
+3. **Deploy:**
    ```bash
    ./deploy.sh
    ```
 
-## Service URLs
+## Access
 
-- **Dashboard**: http://your-server-ip:3001
-- **API**: http://your-server-ip:3001/api/members
-- **Docs**: http://your-server-ip:3001/api/docs
+- **Dashboard**: http://localhost:3001
+- **API**: http://localhost:3001/api/members
+- **Health**: http://localhost:3001/health
 
 ## Updates
 
-Simply pull latest changes and redeploy:
-
 ```bash
-git pull
-./deploy.sh
+git pull && ./deploy.sh
 ```
 
-## Manual Commands
+## Commands
 
 ```bash
-# View logs
+# Logs
 docker logs wow-guild-sync -f
 
-# Check status  
+# Status
 docker ps
 
-# Restart service
+# Restart
 docker compose restart
 
-# Stop service
+# Stop
 docker compose down
 ```
 
-## Database Backups
+## Notes
 
-The deployment script automatically creates database backups before each deployment in `./data/` directory. It keeps the last 5 backups automatically.
+- Database auto-backups to `./data/`
+- Keeps last 5 backups
+- Auto-creates data directory
+- Health checks every 30s
+- Watchtower handles updates

@@ -55,6 +55,13 @@ fi
 
 print_status "Docker is running ✓"
 
+# Create data directory if it doesn't exist
+if [ ! -d "./data" ]; then
+    print_status "Creating data directory..."
+    mkdir -p ./data
+    print_success "Data directory created"
+fi
+
 # Backup existing database if it exists
 if [ -f "./data/guild-sync.db" ]; then
     BACKUP_NAME="guild-sync-backup-$(date +%Y%m%d-%H%M%S).db"
