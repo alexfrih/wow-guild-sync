@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Castle, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Trash2, Search } from 'lucide-react';
+import { Castle, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Trash2, Search, Zap } from 'lucide-react';
 
 function App() {
   const [members, setMembers] = useState([]);
@@ -9,6 +9,7 @@ function App() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [discovering, setDiscovering] = useState(false);
+  const [forceSyncing, setForceSyncing] = useState(false);
   
   // Sorting state
   const [sortColumn, setSortColumn] = useState(() => 
@@ -193,6 +194,32 @@ function App() {
     }
   };
 
+  const handleForceSync = async () => {
+    setForceSyncing(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/force-sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) throw new Error('Failed to trigger force sync');
+      
+      const result = await response.json();
+      
+      // Show success message temporarily
+      setError(`⚡ Force sync triggered for ${result.characters_marked} characters. Item levels, M+ scores, and PvP ratings will update shortly.`);
+      setTimeout(() => setError(null), 8000);
+      
+    } catch (err) {
+      setError(`Force sync failed: ${err.message}`);
+    } finally {
+      setForceSyncing(false);
+    }
+  };
+
   useEffect(() => {
     fetchMembers();
     const interval = setInterval(fetchMembers, 30000); // Auto-refresh every 30 seconds
@@ -227,6 +254,14 @@ function App() {
               >
                 <Search className={`w-4 h-4 ${discovering ? 'animate-pulse' : ''}`} />
                 {discovering ? 'Discovering...' : 'Discover Guild'}
+              </button>
+              <button 
+                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2"
+                onClick={handleForceSync}
+                disabled={forceSyncing || loading}
+              >
+                <Zap className={`w-4 h-4 ${forceSyncing ? 'animate-bounce' : ''}`} />
+                {forceSyncing ? 'Force Syncing...' : 'Force Sync All'}
               </button>
               <button 
                 className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2"

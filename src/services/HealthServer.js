@@ -186,6 +186,44 @@ class HealthServer {
       }
     });
 
+    // Force sync all characters endpoint
+    this.app.post('/api/force-sync', async (req, res) => {
+      try {
+        if (!global.guildSyncService) {
+          return res.status(503).json({ error: 'Service not ready' });
+        }
+
+        Logger.info('⚡ Force sync all characters request received');
+        
+        // Force update all characters to need sync
+        const result = await global.guildSyncService.db.forceAllCharactersNeedSync();
+        
+        // Trigger immediate sync processing
+        setTimeout(async () => {
+          try {
+            await global.guildSyncService.processPlayerSync();
+          } catch (error) {
+            Logger.error('Force sync processing failed:', error.message);
+          }
+        }, 1000);
+        
+        res.json({
+          success: true,
+          message: `Force sync triggered for ${result.characters_marked} characters. Sync will begin immediately.`,
+          timestamp: new Date().toISOString(),
+          characters_marked: result.characters_marked
+        });
+      } catch (error) {
+        Logger.error('Force sync endpoint failed:', error.message || error);
+        console.error('Force sync endpoint full error:', error);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to trigger force sync', 
+          details: error.message 
+        });
+      }
+    });
+
     // Beautiful HTML Documentation endpoint
     this.app.get('/docs', (req, res) => {
       const guildConfig = global.guildSyncService?.config?.guild || {};
@@ -263,6 +301,17 @@ class HealthServer {
                         <p class="text-zinc-300 mb-3">🔍 Manually trigger guild member discovery</p>
                         <div class="bg-zinc-950 p-3 rounded border border-green-700">
                             <pre class="text-sm text-green-300"><code>curl -X POST http://localhost:3001/api/discover</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="bg-zinc-800 border border-purple-700 rounded-lg p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="bg-purple-600 text-white px-2 py-1 rounded text-xs font-bold">POST</span>
+                            <code class="text-[#69ccf0]">/api/force-sync</code>
+                        </div>
+                        <p class="text-zinc-300 mb-3">⚡ Force sync all character data (item levels, M+ scores, PvP ratings)</p>
+                        <div class="bg-zinc-950 p-3 rounded border border-purple-700">
+                            <pre class="text-sm text-purple-300"><code>curl -X POST http://localhost:3001/api/force-sync</code></pre>
                         </div>
                     </div>
 

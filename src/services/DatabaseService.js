@@ -334,6 +334,28 @@ class DatabaseService {
       });
     });
   }
+
+  async forceAllCharactersNeedSync() {
+    return new Promise((resolve, reject) => {
+      // Set all active characters to need sync by setting last_updated to very old date
+      const sql = `
+        UPDATE guild_members 
+        SET last_updated = datetime('2020-01-01 00:00:00')
+        WHERE is_active = 1
+      `;
+      
+      this.db.run(sql, function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({
+            characters_marked: this.changes,
+            message: 'All active characters marked for immediate sync'
+          });
+        }
+      });
+    });
+  }
 }
 
 module.exports = DatabaseService;
