@@ -35,27 +35,70 @@ class PlayerSyncService {
     }
   }
 
-  async syncPlayer(characterName, realm, region) {
+  async syncWowData({ name, realm, region }) {
     try {
-      await this.sleep(this.config.guild.rateLimit.blizzard);
+      // Rate limiting
+      if (this.config?.guild?.rateLimit?.blizzard) {
+        await this.sleep(this.config.guild.rateLimit.blizzard);
+      }
       
       const token = await this.getBlizzardToken();
-      const url = `https://${region}.api.blizzard.com/profile/wow/character/${realm}/${characterName.toLowerCase()}?namespace=profile-${region}&locale=en_US&access_token=${token}`;
+      const normalizedRealm = encodeURIComponent(realm.toLowerCase());
+      const normalizedName = encodeURIComponent(name.toLowerCase());
+      const baseUrl = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}`;
       
-      this.logger.info(`Syncing player: ${characterName} from ${realm}-${region}`);
+      this.logger.info(`Syncing WoW data for: ${name} from ${realm}-${region}`);
       
-      const response = await axios.get(url);
+      // Get basic character info
+      const characterResponse = await axios.get(`${baseUrl}?namespace=profile-${region}&locale=en_US`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       
+      let mythicPlusScore = 0;
+      
+      try {
+        // Get mythic+ data with additional rate limiting
+        await this.sleep(1000);
+        const mythicResponse = await axios.get(`${baseUrl}/mythic-keystone-profile?namespace=profile-${region}&locale=en_US`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        mythicPlusScore = Math.round(mythicResponse.data.current_mythic_rating?.rating || 0);
+      } catch (mythicError) {
+        // M+ data might not be available for all characters
+        this.logger.debug(`No M+ data for ${name}: ${mythicError.message}`);
+      }
+      
+      return {
+        character_class: characterResponse.data.character_class?.name || 'Unknown',
+        level: characterResponse.data.level || 0,
+        item_level: characterResponse.data.equipped_item_level || characterResponse.data.average_item_level || 0,
+        mythic_plus_score: mythicPlusScore,
+        last_updated: new Date()
+      };
+      
+    } catch (error) {
+      this.logger.error(`Failed to sync WoW data for ${name}:`, error.message || error);
+      if (error.response) {
+        this.logger.error(`API Response: ${error.response.status} - ${JSON.stringify(error.response.data)}`);
+      }
+      throw error;
+    }
+  }
+  
+  async syncPlayer(characterName, realm, region) {
+    try {
+      const data = await this.syncWowData({ name: characterName, realm, region });
       return {
         character_name: characterName,
         realm: realm,
-        class: response.data.character_class?.name || 'Unknown',
-        level: response.data.level || 0,
-        item_level: response.data.item_level || 0,
-        last_updated: new Date(),
+        ...data,
         is_active: 1
       };
-      
     } catch (error) {
       this.logger.error(`Failed to sync player ${characterName}:`, error.message);
       return null;

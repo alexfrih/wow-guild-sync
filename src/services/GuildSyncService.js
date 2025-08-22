@@ -40,8 +40,16 @@ class GuildSyncService {
       await this.db.initialize();
       Logger.info('✅ Database initialized');
 
+      // Clean up any duplicates from previous runs
+      await this.db.cleanupDuplicates();
+      Logger.info('🧹 Cleaned up duplicate entries');
+
       // Initial guild discovery
       await this.discoverGuildMembers();
+
+      // Run one initial player sync to start populating data
+      Logger.info('🔄 Running initial player sync...');
+      await this.processPlayerSync();
 
       // Schedule guild discovery (every 6 hours by default)
       this.scheduleGuildDiscovery();
@@ -122,7 +130,7 @@ class GuildSyncService {
       Logger.info('🔍 Starting guild member discovery...');
       this.stats.lastDiscovery = new Date();
 
-      const members = await this.guildDiscovery.discoverMembers();
+      const members = await this.guildDiscovery.discoverGuildMembers();
       
       if (members.length === 0) {
         Logger.warn('⚠️  No guild members found');
@@ -164,7 +172,8 @@ class GuildSyncService {
       });
 
     } catch (error) {
-      Logger.error('❌ Guild discovery failed:', error);
+      Logger.error('❌ Guild discovery failed:', error.message || error);
+      console.error('Guild discovery full error:', error);
       
       await this.webApi.updateStatus({
         level: 'error',
@@ -175,8 +184,11 @@ class GuildSyncService {
 
   async processPlayerSync() {
     try {
+      Logger.info('🔄 Processing player sync batch...');
+      
       // Get next batch of players to sync
       const jobs = await this.db.getNextSyncJobs(this.config.guild.rateLimit.batchSize);
+      Logger.info(`Found ${jobs.length} players to sync`);
       
       if (jobs.length === 0) {
         return; // No pending jobs
@@ -192,68 +204,43 @@ class GuildSyncService {
         if (!this.isRunning) break; // Stop if service is shutting down
 
         try {
-          // Mark job as processing
-          await this.db.markJobProcessing(job.id);
+          Logger.debug(`⚙️  Syncing WoW data for ${job.character_name}...`);
 
-          Logger.debug(`⚙️  Syncing ${job.data_type} for ${job.player_name}...`);
+          // Sync WoW character data
+          const data = await this.playerSync.syncWowData({
+            name: job.character_name,
+            realm: job.realm,
+            region: this.config.guild.region
+          });
 
-          let success = false;
-
-          if (job.data_type === 'wow_data') {
-            // Sync WoW data
-            const data = await this.playerSync.syncWowData({
-              name: job.player_name,
-              realm: job.player_realm,
-              region: job.player_region
+          if (data) {
+            // Update database with synced data
+            await this.db.upsertGuildMember({
+              character_name: job.character_name,
+              realm: job.realm,
+              class: data.character_class,
+              level: data.level,
+              item_level: data.item_level,
+              mythic_plus_score: data.mythic_plus_score
             });
 
-            if (data) {
-              success = await this.webApi.pushPlayerData(
-                job.player_name,
-                job.player_realm, 
-                job.player_region,
-                data
-              );
-            }
-
-          } else if (job.data_type === 'pvp_data') {
-            // Sync PvP data
-            const data = await this.playerSync.syncPvpData({
-              name: job.player_name,
-              realm: job.player_realm,
-              region: job.player_region
-            });
-
-            if (data) {
-              success = await this.webApi.pushPvpData(
-                job.player_name,
-                job.player_realm,
-                job.player_region, 
-                data
-              );
-            }
-          }
-
-          if (success) {
-            await this.db.markJobCompleted(job.id, this.config.guild.syncIntervalMinutes);
             processed++;
             this.stats.totalSynced++;
             
-            Logger.info(`✅ ${job.data_type} synced for ${job.player_name}`);
+            Logger.info(`✅ WoW data synced for ${job.character_name}`);
           } else {
-            await this.db.markJobFailed(job.id, 'Sync failed');
             errors++;
             this.stats.totalErrors++;
             
-            Logger.warn(`⚠️  ${job.data_type} failed for ${job.player_name}`);
+            Logger.warn(`⚠️  WoW data sync failed for ${job.character_name}`);
           }
 
         } catch (error) {
-          await this.db.markJobFailed(job.id, error.message);
           errors++;
           this.stats.totalErrors++;
           
-          Logger.error(`❌ Error syncing ${job.data_type} for ${job.player_name}:`, error);
+          Logger.error(`❌ Error syncing WoW data for ${job.character_name}:`, error.message || error);
+          console.error('Full sync error:', error);
         }
       }
 
@@ -277,7 +264,8 @@ class GuildSyncService {
       }
 
     } catch (error) {
-      Logger.error('❌ Player sync batch failed:', error);
+      Logger.error('❌ Player sync batch failed:', error.message || error);
+      console.error('Player sync full error:', error);
       this.stats.totalErrors++;
     }
   }
@@ -330,6 +318,26 @@ class GuildSyncService {
       };
     }
   }
+
+  async getGuildMembers() {
+    return new Promise((resolve, reject) => {
+      const sql = `
+        SELECT character_name, realm, class, level, item_level, mythic_plus_score, last_updated, is_active
+        FROM guild_members 
+        WHERE is_active = 1
+        ORDER BY item_level DESC, character_name ASC
+      `;
+      
+      this.db.db.all(sql, (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows || []);
+        }
+      });
+    });
+  }
+
 }
 
 module.exports = GuildSyncService;

@@ -3,6 +3,7 @@
  */
 
 const express = require('express');
+const path = require('path');
 const Logger = require('../utils/Logger');
 
 class HealthServer {
@@ -15,6 +16,10 @@ class HealthServer {
   async start() {
     // JSON middleware
     this.app.use(express.json());
+    
+    // Serve React build files
+    const buildPath = path.join(__dirname, '../web/build');
+    this.app.use(express.static(buildPath));
 
     // Health check endpoint
     this.app.get('/health', async (req, res) => {
@@ -92,6 +97,87 @@ class HealthServer {
         Logger.error('Metrics endpoint failed:', error);
         res.status(500).send('Error generating metrics');
       }
+    });
+
+    // Guild members API endpoint
+    this.app.get('/api/members', async (req, res) => {
+      try {
+        if (!global.guildSyncService) {
+          return res.status(503).json({ error: 'Service not ready' });
+        }
+
+        const members = await global.guildSyncService.getGuildMembers();
+        res.json({
+          count: members.length,
+          members: members
+        });
+      } catch (error) {
+        Logger.error('Members endpoint failed:', error.message || error);
+        console.error('Members endpoint full error:', error);
+        res.status(500).json({ error: 'Failed to get guild members', details: error.message });
+      }
+    });
+
+    // API Documentation endpoint
+    this.app.get('/api/docs', (req, res) => {
+      const guildConfig = global.guildSyncService?.config?.guild || {};
+      res.json({
+        title: 'WoW Guild Sync API',
+        version: '1.0.0',
+        description: 'API endpoints for accessing World of Warcraft guild member data',
+        guild: {
+          name: guildConfig.name || 'Unknown',
+          realm: guildConfig.realm || 'Unknown',
+          region: guildConfig.region || 'Unknown'
+        },
+        endpoints: {
+          '/api/members': {
+            method: 'GET',
+            description: 'Get all guild members with their character data',
+            response: {
+              count: 'number - Total number of guild members',
+              members: 'array - Array of guild member objects'
+            },
+            member_object: {
+              character_name: 'string - Character name',
+              realm: 'string - Server realm',
+              class: 'string - Character class (e.g., Warrior, Mage)',
+              level: 'number - Character level (1-80)',
+              item_level: 'number - Average item level',
+              mythic_plus_score: 'number - Mythic+ rating score',
+              last_updated: 'string - ISO timestamp of last data sync'
+            }
+          },
+          '/api/docs': {
+            method: 'GET', 
+            description: 'This API documentation'
+          },
+          '/health': {
+            method: 'GET',
+            description: 'Health check endpoint for monitoring'
+          },
+          '/metrics': {
+            method: 'GET',
+            description: 'Prometheus metrics endpoint'
+          }
+        },
+        examples: {
+          member_object: {
+            character_name: 'Critter',
+            realm: 'Archimonde',
+            class: 'Death Knight',
+            level: 80,
+            item_level: 676,
+            mythic_plus_score: 3198,
+            last_updated: '2025-08-22T10:39:38.000Z'
+          }
+        }
+      });
+    });
+
+    // Serve React app for all other routes (SPA fallback)
+    this.app.get('*', (req, res) => {
+      res.sendFile(path.join(__dirname, '../web/build/index.html'));
     });
 
     // Start server

@@ -1,13 +1,18 @@
-version: '3.8'
-
 services:
-  # 🏰 Guild Sync Service
   guild-sync:
     build: 
       context: .
       dockerfile: Dockerfile
-    container_name: poolparty-guild-sync
+    container_name: wow-guild-sync
     restart: unless-stopped
+    
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: package.json
     
     # Environment configuration
     env_file:
@@ -17,6 +22,10 @@ services:
       - NODE_ENV=production
       - DATABASE_PATH=/app/data/guild-sync.db
       - HEALTH_CHECK_PORT=3001
+    
+    # Port mapping
+    ports:
+      - "3001:3001"
     
     # Volume for persistent SQLite database
     volumes:
@@ -52,16 +61,13 @@ services:
         max-size: "100m"
         max-file: "3"
     
-    # Labels for management
     labels:
-      - "com.poolparty.service=guild-sync"
-      - "com.poolparty.version=1.0.0"
-      - "traefik.enable=false"
+      - "com.wowguildsync.service=guild-sync"
+      - "com.wowguildsync.version=1.0.0"
 
-  # 📊 Optional: Monitoring with Watchtower (auto-updates)
   watchtower:
     image: containrrr/watchtower:latest
-    container_name: poolparty-watchtower
+    container_name: wow-watchtower
     restart: unless-stopped
     
     volumes:
@@ -77,7 +83,7 @@ services:
       - guild_network
     
     labels:
-      - "com.poolparty.service=watchtower"
+      - "com.wowguildsync.service=watchtower"
 
   # 📈 Optional: Prometheus monitoring
   # Uncomment if you want metrics collection
