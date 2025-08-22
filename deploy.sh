@@ -1,9 +1,8 @@
 #!/bin/bash
 
-# 🚀 WoW Guild Sync - Automated Deployment Script
-# Run this after git pull to deploy everything automatically
+# 🚀 WoW Guild Sync - Zero-Downtime Deployment Script
 
-set -e  # Exit on any error
+set -e
 
 echo "🚀 Starting WoW Guild Sync deployment..."
 
@@ -14,7 +13,6 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Function to print colored output
 print_status() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -71,7 +69,7 @@ if [ -f "./data/guild-sync.db" ]; then
     
     # Keep only last 5 backups
     print_status "Cleaning old backups (keeping last 5)"
-    ls -t ./data/guild-sync-backup-*.db | tail -n +6 | xargs -r rm --
+    ls -t ./data/guild-sync-backup-*.db 2>/dev/null | tail -n +6 | xargs -r rm -- 2>/dev/null || true
 fi
 
 # Build React app with Vite
@@ -85,22 +83,57 @@ npm run build
 cd ../..
 print_success "Frontend built"
 
-# Stop existing containers gracefully (preserve volumes)
-print_status "Stopping existing containers..."
-docker compose down
-print_success "Containers stopped"
+# Zero-downtime rolling deployment
+print_status "Performing zero-downtime deployment..."
 
-# Build and start new containers
-print_status "Building and starting Docker containers..."
-docker compose up --build -d
-print_success "Containers started"
+# Check if service is currently running
+CURRENT_RUNNING=$(docker ps -q -f name=wow-guild-sync 2>/dev/null || echo "")
+
+if [ -n "$CURRENT_RUNNING" ]; then
+    print_status "Service currently running, performing rolling update..."
+    
+    # Build new image
+    docker compose build --no-cache
+    
+    # Start new container alongside old one
+    docker compose up -d --no-deps --scale guild-sync=2 guild-sync
+    
+    # Wait for new container to be healthy
+    print_status "Waiting for new container to be healthy..."
+    sleep 15
+    
+    # Health check on the service
+    if curl -f -s http://localhost:3001/health > /dev/null 2>&1; then
+        print_success "New container is healthy"
+        
+        # Scale back to 1 (removes old container)
+        docker compose up -d --no-deps --scale guild-sync=1 guild-sync
+        
+        # Remove any orphaned containers
+        docker compose down --remove-orphans
+        
+        # Start final clean deployment
+        docker compose up -d
+        
+    else
+        print_error "New container failed health check, rolling back..."
+        docker compose down
+        docker compose up -d
+        exit 1
+    fi
+else
+    print_status "No running service found, starting fresh..."
+    docker compose up --build -d
+fi
+
+print_success "Deployment completed"
 
 # Wait for services to be ready
 print_status "Waiting for services to start..."
 sleep 10
 
-# Health check
-print_status "Performing health check..."
+# Final health check
+print_status "Performing final health check..."
 MAX_RETRIES=30
 RETRY_COUNT=0
 
@@ -129,7 +162,7 @@ echo "════════════════════════�
 echo ""
 echo "🌐 Web Dashboard:    http://localhost:3001"
 echo "🔗 JSON API:         http://localhost:3001/api/members"  
-echo "📖 API Docs:         http://localhost:3001/api/docs"
+echo "📖 API Docs:         http://localhost:3001/docs"
 echo "💚 Health Check:     http://localhost:3001/health"
 echo "📊 Metrics:          http://localhost:3001/metrics"
 echo ""
@@ -142,7 +175,7 @@ echo ""
 
 # Show current status
 print_status "Current service status:"
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" --filter name=wow
 
 echo ""
 print_success "Ready to sync your WoW guild! 🏰"
