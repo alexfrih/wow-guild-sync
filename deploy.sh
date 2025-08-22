@@ -83,9 +83,16 @@ npm run build
 cd ../..
 print_success "Frontend built"
 
-# Simple deployment with minimal downtime
-print_status "Deploying containers..."
-docker compose up --build -d --force-recreate --remove-orphans
+# Clean deployment approach
+print_status "Stopping existing containers..."
+docker compose down 2>/dev/null || true
+
+print_status "Building new containers..."
+docker compose build --no-cache
+
+print_status "Starting containers..."
+docker compose up -d
+
 print_success "Deployment completed"
 
 # Wait for services to be ready
