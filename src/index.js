@@ -75,7 +75,8 @@ async function main() {
     Logger.info('🔄 Guild sync is now running autonomously...');
     
   } catch (error) {
-    Logger.error('💥 Failed to start service:', error);
+    Logger.error('💥 Failed to start service:', error.message || error);
+    console.error('Full error:', error);
     process.exit(1);
   }
 }

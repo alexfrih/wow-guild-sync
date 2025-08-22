@@ -35,6 +35,11 @@ class DatabaseService {
     });
   }
 
+  async initialize() {
+    await this.connect();
+    await this.initTables();
+  }
+
   async initTables() {
     return new Promise((resolve, reject) => {
       const sql = `

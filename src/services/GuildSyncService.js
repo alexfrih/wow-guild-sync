@@ -60,7 +60,8 @@ class GuildSyncService {
       });
 
     } catch (error) {
-      Logger.error('❌ Failed to start Guild Sync Service:', error);
+      Logger.error('❌ Failed to start Guild Sync Service:', error.message || error);
+      console.error('GuildSyncService full error:', error);
       throw error;
     }
   }
