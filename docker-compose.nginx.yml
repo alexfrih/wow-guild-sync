@@ -1,0 +1,99 @@
+# 🌐 Docker Compose with Nginx (optional)
+# Use this if you want external access to monitoring endpoints
+
+version: '3.8'
+
+services:
+  # 🏰 Guild Sync Service (same as before)
+  guild-sync:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: poolparty-guild-sync
+    restart: unless-stopped
+    
+    env_file:
+      - .env
+    
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/app/data/guild-sync.db
+      - HEALTH_CHECK_PORT=3001
+    
+    volumes:
+      - guild_data:/app/data
+      - ./logs:/app/logs
+    
+    networks:
+      - guild_network
+    
+    # Only expose to nginx (not to host)
+    expose:
+      - "3001"
+    
+    healthcheck:
+      test: ["CMD", "node", "src/health-check.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # 🌐 Nginx Proxy (for external monitoring)
+  nginx:
+    image: nginx:alpine
+    container_name: poolparty-nginx
+    restart: unless-stopped
+    
+    ports:
+      - "80:80"
+      # - "443:443"  # Uncomment for HTTPS
+    
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx_logs:/var/log/nginx
+      # - ./ssl:/etc/nginx/ssl:ro  # Uncomment for HTTPS
+    
+    networks:
+      - guild_network
+    
+    depends_on:
+      - guild-sync
+    
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+volumes:
+  guild_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+  
+  nginx_logs:
+    driver: local
+
+networks:
+  guild_network:
+    driver: bridge

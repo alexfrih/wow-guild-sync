@@ -1,0 +1,61 @@
+# 🏰 Pool Party Guild Sync Service
+# Multi-stage Docker build for optimal size and security
+
+# Build stage
+FROM node:20-alpine AS builder
+
+# Install build dependencies for native modules (sqlite3)
+RUN apk add --no-cache python3 make g++ sqlite
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Runtime stage  
+FROM node:20-alpine AS runtime
+
+# Install runtime dependencies
+RUN apk add --no-cache sqlite tini
+
+# Create non-root user
+RUN addgroup -g 1001 -S guilduser && \
+    adduser -S guilduser -u 1001 -G guilduser
+
+WORKDIR /app
+
+# Copy dependencies from builder
+COPY --from=builder /app/node_modules ./node_modules
+
+# Copy application code
+COPY src ./src
+COPY package.json ./
+
+# Create data directory for SQLite database
+RUN mkdir -p /app/data && \
+    chown -R guilduser:guilduser /app
+
+# Switch to non-root user
+USER guilduser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node src/health-check.js || exit 1
+
+# Use tini as PID 1 for proper signal handling
+ENTRYPOINT ["/sbin/tini", "--"]
+
+# Start the service
+CMD ["node", "src/index.js"]
+
+# Expose health check port (optional)
+EXPOSE 3001
+
+# Labels
+LABEL org.opencontainers.image.title="Pool Party Guild Sync"
+LABEL org.opencontainers.image.description="Autonomous WoW guild sync service"
+LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.authors="Pool Party Guild"

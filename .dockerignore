@@ -1,0 +1,82 @@
+# 🏰 Pool Party Guild Sync - Docker Ignore
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Database files (these should be in volumes)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+data/
+
+# Logs (these should be in volumes)
+logs/
+*.log
+
+# Git
+.git/
+.gitignore
+.gitkeep
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Docker files
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Documentation
+README.md
+*.md
+
+# Testing
+test/
+tests/
+__tests__/
+*.test.js
+*.spec.js
+coverage/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Build artifacts
+dist/
+build/
+
+# Cache
+.cache/
+.parcel-cache/
+
+# Runtime
+*.pid
+*.pid.lock
+pids/
+
+# Other
+.nyc_output/
