@@ -83,15 +83,18 @@ npm run build
 cd ../..
 print_success "Frontend built"
 
-# Clean deployment approach
+# Clean deployment approach with automatic yes
 print_status "Stopping existing containers..."
 docker compose down 2>/dev/null || true
 
-print_status "Building new containers..."
-docker compose build --no-cache
+print_status "Cleaning up old volumes and networks..."
+docker system prune -f --volumes 2>/dev/null || true
+
+print_status "Building containers..."
+docker compose build
 
 print_status "Starting containers..."
-docker compose up -d
+echo "y" | docker compose up -d
 
 print_success "Deployment completed"
 
