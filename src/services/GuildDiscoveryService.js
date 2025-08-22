@@ -34,7 +34,8 @@ class GuildDiscoveryService {
       
       // Use Blizzard API for guild roster (no more Raider.io!)
       const guildSlug = name.toLowerCase().replace(/\s+/g, '-');
-      const url = `https://${region}.api.blizzard.com/data/wow/guild/${realm}/${guildSlug}/roster?namespace=profile-${region}&locale=en_US`;
+      const realmSlug = realm.toLowerCase().replace(/\s+/g, '-');
+      const url = `https://${region}.api.blizzard.com/data/wow/guild/${realmSlug}/${guildSlug}/roster?namespace=profile-${region}&locale=en_US`;
       
       this.logger.info(`Discovering guild members for ${name} on ${realm}-${region} via Blizzard API`);
       

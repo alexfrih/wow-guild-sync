@@ -225,7 +225,8 @@ class GuildSyncService {
               class: data.character_class,
               level: data.level,
               item_level: data.item_level,
-              mythic_plus_score: data.mythic_plus_score
+              mythic_plus_score: data.mythic_plus_score,
+              current_pvp_rating: data.current_pvp_rating
             });
 
             processed++;
@@ -326,7 +327,7 @@ class GuildSyncService {
   async getGuildMembers() {
     return new Promise((resolve, reject) => {
       const sql = `
-        SELECT character_name, realm, class, level, item_level, mythic_plus_score, last_updated, is_active
+        SELECT character_name, realm, class, level, item_level, mythic_plus_score, current_pvp_rating, last_updated, is_active
         FROM guild_members 
         WHERE is_active = 1
         ORDER BY item_level DESC, character_name ASC

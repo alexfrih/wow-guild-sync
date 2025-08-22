@@ -59,50 +59,65 @@ class PlayerSyncService {
       let mythicPlusScore = 0;
       
       try {
-        // Cache current season ID globally to avoid repeated API calls
-        if (!global.currentMythicSeasonId) {
-          const currentSeasonResponse = await axios.get(`https://${region}.api.blizzard.com/data/wow/mythic-keystone/season/index?namespace=dynamic-${region}&locale=en_US`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          global.currentMythicSeasonId = currentSeasonResponse.data.current_season?.id || 15;
-          this.logger.info(`Cached current M+ season: ${global.currentMythicSeasonId}`);
-        }
+        // Get M+ scores from Raider.io (much faster and current season accurate)
+        await this.sleep(200); // Minimal delay for Raider.io
         
-        // Get mythic+ data with minimal rate limiting  
-        await this.sleep(500); // Reduced from 1000ms
+        const raiderUrl = `https://raider.io/api/v1/characters/profile?region=${region}&realm=${realm}&name=${encodeURIComponent(name)}&fields=mythic_plus_scores_by_season:current`;
         
-        // Try current season directly (Season 15 hardcoded for performance)
-        try {
-          const currentSeasonResponse = await axios.get(`${baseUrl}/mythic-keystone-profile/season/15?namespace=profile-${region}&locale=en_US`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
+        const raiderResponse = await axios.get(raiderUrl);
+        
+        if (raiderResponse.data.mythic_plus_scores_by_season && raiderResponse.data.mythic_plus_scores_by_season.length > 0) {
+          // Get current season score (should be season-tww-3)
+          const currentSeasonScore = raiderResponse.data.mythic_plus_scores_by_season[0];
+          mythicPlusScore = currentSeasonScore.scores?.all || 0;
           
-          // Calculate total rating from best runs in current season
-          const bestRuns = currentSeasonResponse.data.best_runs || [];
-          if (bestRuns.length > 0) {
-            const totalRating = bestRuns.reduce((sum, run) => sum + (run.map_rating?.rating || 0), 0);
-            mythicPlusScore = Math.round(totalRating);
-          }
-        } catch (currentSeasonError) {
-          // Fallback to overall profile for inactive players
-          const mythicResponse = await axios.get(`${baseUrl}/mythic-keystone-profile?namespace=profile-${region}&locale=en_US`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          
-          // Check if current_mythic_rating is from current season, otherwise use 0
-          const currentRating = mythicResponse.data.current_mythic_rating?.rating || 0;
-          // If rating is very high (2000+), it's likely old season data, reset to 0
-          mythicPlusScore = currentRating > 2000 ? 0 : Math.round(currentRating);
+          // Log season info for verification
+          this.logger.debug(`M+ for ${name}: ${currentSeasonScore.season}, Score: ${mythicPlusScore}`);
         }
       } catch (mythicError) {
         // M+ data might not be available for all characters
         this.logger.debug(`No M+ data for ${name}: ${mythicError.message}`);
+      }
+
+      // Get current PvP ratings from Blizzard API (including Solo Shuffle)
+      let currentPvpRating = 0;
+      let pvpSource = '';
+      try {
+        await this.sleep(300); // Small delay between API calls
+        
+        // Get character spec for Solo Shuffle
+        const characterClass = characterResponse.data.character_class?.name?.toLowerCase() || '';
+        const activeSpec = characterResponse.data.active_spec?.name?.toLowerCase() || '';
+        
+        // Prepare PvP brackets including spec-specific Solo Shuffle
+        const pvpBrackets = ['2v2', '3v3', 'rbg'];
+        if (characterClass && activeSpec) {
+          pvpBrackets.push(`shuffle-${characterClass}-${activeSpec}`);
+        }
+        
+        const pvpPromises = pvpBrackets.map(async (bracket) => {
+          try {
+            const pvpResponse = await axios.get(`${baseUrl}/pvp-bracket/${bracket}?namespace=profile-${region}&locale=en_US`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            return { bracket, rating: pvpResponse.data.rating || 0 };
+          } catch {
+            return { bracket, rating: 0 };
+          }
+        });
+
+        const results = await Promise.all(pvpPromises);
+        const bestResult = results.reduce((best, current) => 
+          current.rating > best.rating ? current : best, { bracket: '', rating: 0 });
+        
+        currentPvpRating = bestResult.rating;
+        pvpSource = bestResult.bracket;
+        
+        if (currentPvpRating > 0) {
+          this.logger.debug(`PvP for ${name}: ${pvpSource} = ${currentPvpRating}`);
+        }
+      } catch (pvpError) {
+        this.logger.debug(`No PvP data for ${name}: ${pvpError.message}`);
       }
       
       return {
@@ -110,6 +125,7 @@ class PlayerSyncService {
         level: characterResponse.data.level || 0,
         item_level: characterResponse.data.equipped_item_level || characterResponse.data.average_item_level || 0,
         mythic_plus_score: mythicPlusScore,
+        current_pvp_rating: currentPvpRating,
         last_updated: new Date()
       };
       

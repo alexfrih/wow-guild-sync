@@ -9,7 +9,8 @@ const config = {
     fastStartup: true, // Enable fast startup mode
     discoveryIntervalHours: 6,
     rateLimit: {
-      blizzard: 1500, // Only Blizzard API used for character sync
+      blizzard: 1500, // Blizzard API for character/item data
+      raiderIO: 300,  // Raider.io for M+ scores (very fast)
       batchSize: 40   // Increased batch size significantly
     }
   },

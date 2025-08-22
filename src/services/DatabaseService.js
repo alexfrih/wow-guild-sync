@@ -53,6 +53,7 @@ class DatabaseService {
           level INTEGER,
           item_level REAL,
           mythic_plus_score REAL,
+          current_pvp_rating INTEGER DEFAULT 0,
           last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
           is_active INTEGER DEFAULT 1,
           UNIQUE(character_name, realm)
@@ -65,15 +66,100 @@ class DatabaseService {
           message TEXT,
           character_name TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS database_versions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          version INTEGER NOT NULL,
+          applied_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          description TEXT
+        );
       `;
       
       this.db.exec(sql, (err) => {
         if (err) {
           reject(err);
         } else {
-          resolve();
+          // Run database migrations
+          this.runMigrations()
+            .then(() => resolve())
+            .catch(reject);
         }
       });
+    });
+  }
+
+  async runMigrations() {
+    // Get current database version
+    const currentVersion = await this.getCurrentVersion();
+    console.log(`📊 Current database version: ${currentVersion}`);
+
+    const migrations = [
+      {
+        version: 1,
+        description: 'Add current_pvp_rating column',
+        sql: 'ALTER TABLE guild_members ADD COLUMN current_pvp_rating INTEGER DEFAULT 0'
+      }
+      // Add future migrations here with version 2, 3, etc.
+    ];
+
+    for (const migration of migrations) {
+      if (currentVersion < migration.version) {
+        try {
+          await this.applyMigration(migration);
+          console.log(`✅ Applied migration v${migration.version}: ${migration.description}`);
+        } catch (error) {
+          // If column already exists, ignore the error
+          if (error.message && error.message.includes('duplicate column name')) {
+            console.log(`⚠️  Migration v${migration.version} already applied (column exists)`);
+            await this.recordMigration(migration.version, migration.description);
+          } else {
+            throw error;
+          }
+        }
+      }
+    }
+  }
+
+  async getCurrentVersion() {
+    return new Promise((resolve, reject) => {
+      this.db.get("SELECT MAX(version) as version FROM database_versions", (err, row) => {
+        if (err) {
+          // Table doesn't exist yet, start from version 0
+          resolve(0);
+        } else {
+          resolve(row?.version || 0);
+        }
+      });
+    });
+  }
+
+  async applyMigration(migration) {
+    return new Promise((resolve, reject) => {
+      this.db.run(migration.sql, (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          this.recordMigration(migration.version, migration.description)
+            .then(resolve)
+            .catch(reject);
+        }
+      });
+    });
+  }
+
+  async recordMigration(version, description) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        "INSERT INTO database_versions (version, description) VALUES (?, ?)",
+        [version, description],
+        (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        }
+      );
     });
   }
 
@@ -81,8 +167,8 @@ class DatabaseService {
     return new Promise((resolve, reject) => {
       const sql = `
         INSERT OR REPLACE INTO guild_members 
-        (character_name, realm, class, level, item_level, mythic_plus_score, last_updated, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
+        (character_name, realm, class, level, item_level, mythic_plus_score, current_pvp_rating, last_updated, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
       `;
       
       this.db.run(sql, [
@@ -91,7 +177,8 @@ class DatabaseService {
         member.class,
         member.level,
         member.item_level,
-        member.mythic_plus_score
+        member.mythic_plus_score,
+        member.current_pvp_rating || 0
       ], (err) => {
         if (err) {
           reject(err);
@@ -209,6 +296,43 @@ class DatabaseService {
   async getMemberCount() {
     const result = await this.db.get('SELECT COUNT(*) as count FROM guild_members');
     return result.count;
+  }
+
+  async resetAllData() {
+    return new Promise((resolve, reject) => {
+      // Get current counts before reset
+      this.db.all(`
+        SELECT 
+          (SELECT COUNT(*) FROM guild_members) as member_count,
+          (SELECT COUNT(*) FROM sync_logs) as log_count
+      `, (err, result) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        const beforeCounts = result[0];
+
+        // Clear all data
+        const resetSql = `
+          DELETE FROM guild_members;
+          DELETE FROM sync_logs;
+          UPDATE database_versions SET applied_at = CURRENT_TIMESTAMP WHERE version = (SELECT MAX(version) FROM database_versions);
+        `;
+        
+        this.db.exec(resetSql, (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve({
+              members_deleted: beforeCounts.member_count,
+              logs_deleted: beforeCounts.log_count,
+              message: 'All guild member and sync log data has been cleared'
+            });
+          }
+        });
+      });
+    });
   }
 }
 

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Castle, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Castle, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Trash2, Search } from 'lucide-react';
 
 function App() {
   const [members, setMembers] = useState([]);
   const [memberCount, setMemberCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
   
   // Sorting state
   const [sortColumn, setSortColumn] = useState(() => 
@@ -135,6 +138,61 @@ function App() {
     }
   };
 
+  const handleReset = async () => {
+    setResetting(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/reset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) throw new Error('Failed to reset data');
+      
+      const result = await response.json();
+      
+      // Update UI immediately
+      setMembers([]);
+      setMemberCount(0);
+      setShowResetConfirm(false);
+      
+      // Show success message temporarily
+      setError(`✅ Successfully reset ${result.members_deleted} members and ${result.logs_deleted} logs. Guild discovery has been triggered.`);
+      setTimeout(() => setError(null), 8000);
+      
+    } catch (err) {
+      setError(`Reset failed: ${err.message}`);
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleDiscover = async () => {
+    setDiscovering(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/discover', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) throw new Error('Failed to trigger guild discovery');
+      
+      // Show success message temporarily
+      setError('✅ Guild discovery has been triggered. Members will appear shortly.');
+      setTimeout(() => setError(null), 5000);
+      
+    } catch (err) {
+      setError(`Discovery failed: ${err.message}`);
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
   useEffect(() => {
     fetchMembers();
     const interval = setInterval(fetchMembers, 30000); // Auto-refresh every 30 seconds
@@ -153,7 +211,7 @@ function App() {
               <Castle className="w-8 h-8" />
               Pool Party Sync Dashboard
             </h1>
-            <div className="flex justify-center gap-4">
+            <div className="flex justify-center gap-4 flex-wrap">
               <button 
                 className="bg-[#ff8000] hover:bg-orange-600 text-zinc-900 font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2"
                 onClick={fetchMembers}
@@ -161,6 +219,22 @@ function App() {
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh Data
+              </button>
+              <button 
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2"
+                onClick={handleDiscover}
+                disabled={discovering || loading}
+              >
+                <Search className={`w-4 h-4 ${discovering ? 'animate-pulse' : ''}`} />
+                {discovering ? 'Discovering...' : 'Discover Guild'}
+              </button>
+              <button 
+                className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2"
+                onClick={() => setShowResetConfirm(true)}
+                disabled={resetting || loading}
+              >
+                <Trash2 className={`w-4 h-4 ${resetting ? 'animate-pulse' : ''}`} />
+                Reset All Data
               </button>
               <a 
                 href="/api/members" 
@@ -313,6 +387,47 @@ function App() {
             )}
           </div>
         </div>
+
+        {/* Reset Confirmation Dialog */}
+        {showResetConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-zinc-900 border border-red-600 rounded-lg max-w-md w-full p-6">
+              <h2 className="text-xl font-bold text-red-400 mb-4 flex items-center gap-2">
+                <Trash2 className="w-5 h-5" />
+                ⚠️ Reset All Data
+              </h2>
+              <div className="text-zinc-300 mb-6">
+                <p className="mb-3">
+                  This will <strong className="text-red-400">permanently delete all guild member data</strong> including:
+                </p>
+                <ul className="list-disc list-inside space-y-1 text-sm text-zinc-400 mb-4">
+                  <li>All {memberCount} guild members</li>
+                  <li>All sync history and logs</li>
+                  <li>All character progress data</li>
+                </ul>
+                <div className="bg-green-900/20 border border-green-800 rounded p-3 text-green-300">
+                  <strong>Good news:</strong> After reset, guild discovery will be automatically triggered to reload all members immediately.
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition-colors duration-200"
+                  onClick={handleReset}
+                  disabled={resetting}
+                >
+                  {resetting ? 'Resetting...' : 'Yes, Delete Everything'}
+                </button>
+                <button
+                  className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-semibold py-2 px-4 rounded transition-colors duration-200"
+                  onClick={() => setShowResetConfirm(false)}
+                  disabled={resetting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

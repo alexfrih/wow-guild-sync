@@ -118,6 +118,74 @@ class HealthServer {
       }
     });
 
+    // Reset all data endpoint (POST for safety)
+    this.app.post('/api/reset', async (req, res) => {
+      try {
+        if (!global.guildSyncService) {
+          return res.status(503).json({ error: 'Service not ready' });
+        }
+
+        Logger.info('🗑️ Reset data request received');
+        
+        const result = await global.guildSyncService.db.resetAllData();
+        
+        Logger.info('✅ All guild data has been reset');
+        
+        // Auto-trigger guild discovery after reset
+        Logger.info('🔍 Auto-triggering guild discovery after reset...');
+        setTimeout(async () => {
+          try {
+            await global.guildSyncService.discoverGuildMembers();
+          } catch (error) {
+            Logger.error('Auto-discovery after reset failed:', error.message);
+          }
+        }, 1000); // Small delay to ensure response is sent first
+        
+        res.json({
+          success: true,
+          message: 'All guild member data has been reset. Guild discovery has been triggered.',
+          timestamp: new Date().toISOString(),
+          auto_discovery: true,
+          ...result
+        });
+      } catch (error) {
+        Logger.error('Reset endpoint failed:', error.message || error);
+        console.error('Reset endpoint full error:', error);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to reset data', 
+          details: error.message 
+        });
+      }
+    });
+
+    // Manual guild discovery endpoint
+    this.app.post('/api/discover', async (req, res) => {
+      try {
+        if (!global.guildSyncService) {
+          return res.status(503).json({ error: 'Service not ready' });
+        }
+
+        Logger.info('🔍 Manual guild discovery request received');
+        
+        await global.guildSyncService.discoverGuildMembers();
+        
+        res.json({
+          success: true,
+          message: 'Guild discovery has been triggered',
+          timestamp: new Date().toISOString()
+        });
+      } catch (error) {
+        Logger.error('Discovery endpoint failed:', error.message || error);
+        console.error('Discovery endpoint full error:', error);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to trigger guild discovery', 
+          details: error.message 
+        });
+      }
+    });
+
     // Beautiful HTML Documentation endpoint
     this.app.get('/docs', (req, res) => {
       const guildConfig = global.guildSyncService?.config?.guild || {};
@@ -185,6 +253,28 @@ class HealthServer {
                             <code class="text-[#69ccf0]">/metrics</code>
                         </div>
                         <p class="text-zinc-300">Prometheus metrics endpoint for monitoring and alerting</p>
+                    </div>
+
+                    <div class="bg-zinc-800 border border-green-700 rounded-lg p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="bg-green-600 text-white px-2 py-1 rounded text-xs font-bold">POST</span>
+                            <code class="text-[#69ccf0]">/api/discover</code>
+                        </div>
+                        <p class="text-zinc-300 mb-3">🔍 Manually trigger guild member discovery</p>
+                        <div class="bg-zinc-950 p-3 rounded border border-green-700">
+                            <pre class="text-sm text-green-300"><code>curl -X POST http://localhost:3001/api/discover</code></pre>
+                        </div>
+                    </div>
+
+                    <div class="bg-zinc-800 border border-red-700 rounded-lg p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span class="bg-red-600 text-white px-2 py-1 rounded text-xs font-bold">POST</span>
+                            <code class="text-[#69ccf0]">/api/reset</code>
+                        </div>
+                        <p class="text-zinc-300 mb-3">🗑️ Reset all guild member data (Auto-triggers discovery after reset)</p>
+                        <div class="bg-zinc-950 p-3 rounded border border-red-700">
+                            <pre class="text-sm text-red-300"><code>curl -X POST http://localhost:3001/api/reset</code></pre>
+                        </div>
                     </div>
                 </div>
                 
