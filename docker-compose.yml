@@ -29,7 +29,7 @@ services:
     
     # Volume for persistent SQLite database
     volumes:
-      - guild_data:/app/data
+      - ./data:/app/data
       - ./logs:/app/logs
     
     # Network configuration
@@ -108,10 +108,8 @@ services:
   #   networks:
   #     - guild_network
 
-# 💾 Persistent volumes
-volumes:
-  guild_data:
-    driver: local
+# 💾 Persistent volumes using bind mounts
+# Data persists in ./data directory on host
   
   # prometheus_data:
   #   driver: local

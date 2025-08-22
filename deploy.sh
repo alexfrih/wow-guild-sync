@@ -83,15 +83,15 @@ npm run build
 cd ../..
 print_success "Frontend built"
 
-# Clean deployment to avoid volume conflicts
-print_status "Performing clean deployment..."
-docker compose down 2>/dev/null || true
+# Data-preserving deployment
+print_status "Stopping containers (preserving data)..."
+docker compose stop 2>/dev/null || true
 
 print_status "Building containers..."
 docker compose build
 
-print_status "Starting containers..."
-docker compose up -d
+print_status "Starting containers with persistent data..."
+docker compose up -d --remove-orphans
 
 print_success "Deployment completed"
 
