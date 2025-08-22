@@ -170,11 +170,11 @@ function App() {
                 JSON API
               </a>
               <a 
-                href="/api/docs" 
+                href="/docs" 
                 target="_blank"
                 className="bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2"
               >
-                API Docs
+                📖 API Docs
               </a>
             </div>
           </div>
