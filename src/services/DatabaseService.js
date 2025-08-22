@@ -251,7 +251,7 @@ class DatabaseService {
         SELECT character_name, realm 
         FROM guild_members 
         WHERE is_active = 1 
-        AND (level IS NULL OR item_level IS NULL OR last_updated < datetime('now', '-1 hour'))
+        AND (level IS NULL OR item_level IS NULL OR item_level = 0 OR last_updated < datetime('now', '-1 hour'))
         ORDER BY last_updated ASC NULLS FIRST
         LIMIT ?
       `;
