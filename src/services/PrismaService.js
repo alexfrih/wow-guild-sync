@@ -40,6 +40,7 @@ class PrismaService {
         item_level: member.item_level,
         mythic_plus_score: member.mythic_plus_score,
         current_pvp_rating: member.current_pvp_rating || 0,
+        raid_progress: member.raid_progress,
         last_updated: new Date(),
       },
       create: {
@@ -50,6 +51,7 @@ class PrismaService {
         item_level: member.item_level,
         mythic_plus_score: member.mythic_plus_score,
         current_pvp_rating: member.current_pvp_rating || 0,
+        raid_progress: member.raid_progress,
       },
     });
   }
@@ -198,6 +200,7 @@ class PrismaService {
         item_level: true,
         mythic_plus_score: true,
         current_pvp_rating: true,
+        raid_progress: true,
         last_updated: true,
       },
       orderBy: [
@@ -320,6 +323,7 @@ class PrismaService {
         item_level: true,
         mythic_plus_score: true,
         current_pvp_rating: true,
+        raid_progress: true,
         last_login_timestamp: true,
         activity_status: true,
         last_activity_check: true,

@@ -129,7 +129,7 @@ class ExternalApiService {
   // ============================================================================
   
   async getMemberFromRaiderIO(name, realm, region) {
-    const url = `https://raider.io/api/v1/characters/profile?region=${region}&realm=${realm}&name=${encodeURIComponent(name)}&fields=gear,mythic_plus_scores_by_season:current`;
+    const url = `https://raider.io/api/v1/characters/profile?region=${region}&realm=${realm}&name=${encodeURIComponent(name)}&fields=gear,mythic_plus_scores_by_season:current,raid_progression`;
     
     const response = await axios.get(url);
     const data = response.data;
@@ -148,7 +148,14 @@ class ExternalApiService {
       this.logger.warn(`⚠️ No M+ season data found for ${name}`);
     }
     
-    this.logger.info(`📈 Raider.IO data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}`);
+    // Extract raid progression
+    let raidProgress = null;
+    if (data.raid_progression) {
+      raidProgress = this.formatRaidProgression(data.raid_progression);
+      this.logger.info(`🏰 Found raid progress for ${name}: ${raidProgress.summary}`);
+    }
+    
+    this.logger.info(`📈 Raider.IO data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}${raidProgress ? `, Raids: ${raidProgress.summary}` : ''}`);
     
     return {
       source: 'raiderio',
@@ -157,6 +164,7 @@ class ExternalApiService {
       item_level: itemLevel,
       mythic_plus_score: mythicPlusScore,
       current_pvp_rating: 0, // Raider.IO doesn't have PvP data
+      raid_progress: raidProgress ? JSON.stringify(raidProgress) : null,
       last_updated: new Date()
     };
   }
@@ -232,6 +240,7 @@ class ExternalApiService {
       item_level: itemLevel,
       mythic_plus_score: 0, // Blizzard doesn't provide M+ scores
       current_pvp_rating: currentPvpRating,
+      raid_progress: null, // Blizzard API doesn't provide easy raid progression data
       last_updated: new Date()
     };
   }
@@ -346,6 +355,77 @@ class ExternalApiService {
   // UTILITY METHODS
   // ============================================================================
   
+  formatRaidProgression(raidProgression) {
+    const raids = Object.entries(raidProgression);
+    const allRaids = [];
+    
+    // Current raid priority (most recent/important)
+    const raidPriority = ['manaforge-omega', 'liberation-of-undermine', 'nerubar-palace', 'blackrock-depths'];
+    
+    // Process each raid and extract meaningful progress
+    for (const [raidKey, raidData] of raids) {
+      if (raidData.total_bosses > 0) {
+        const raidName = this.formatRaidName(raidKey);
+        let progress = '';
+        
+        // Build progress summary (prioritize highest difficulty with kills)
+        if (raidData.mythic_bosses_killed > 0) {
+          progress = `${raidData.mythic_bosses_killed}/${raidData.total_bosses} M`;
+        } else if (raidData.heroic_bosses_killed > 0) {
+          progress = `${raidData.heroic_bosses_killed}/${raidData.total_bosses} H`;
+        } else if (raidData.normal_bosses_killed > 0) {
+          progress = `${raidData.normal_bosses_killed}/${raidData.total_bosses} N`;
+        }
+        
+        // Always include raids, even with 0 progress if they're current content
+        const priority = raidPriority.indexOf(raidKey);
+        if (progress || priority === 0) { // Include if has progress OR if it's the current raid (priority 0)
+          if (!progress) {
+            progress = `0/${raidData.total_bosses}`;
+          }
+          allRaids.push({
+            key: raidKey,
+            name: raidName,
+            progress: progress,
+            normal: raidData.normal_bosses_killed,
+            heroic: raidData.heroic_bosses_killed,
+            mythic: raidData.mythic_bosses_killed,
+            total: raidData.total_bosses,
+            priority: priority
+          });
+        }
+      }
+    }
+    
+    // Sort by priority (current raid first)
+    allRaids.sort((a, b) => {
+      if (a.priority === -1 && b.priority === -1) return 0;
+      if (a.priority === -1) return 1;
+      if (b.priority === -1) return -1;
+      return a.priority - b.priority;
+    });
+    
+    // Get current raid progress (highest priority with progress)
+    const currentRaid = allRaids.length > 0 ? allRaids[0] : null;
+    const summary = currentRaid ? `${currentRaid.name}: ${currentRaid.progress}` : 'No progress';
+    
+    return {
+      raids: allRaids,
+      currentRaid: currentRaid,
+      summary: summary
+    };
+  }
+  
+  formatRaidName(raidKey) {
+    const raidNames = {
+      'nerubar-palace': 'Nerub-ar Palace',
+      'liberation-of-undermine': 'Liberation of Undermine',
+      'manaforge-omega': 'Manaforge Omega',
+      'blackrock-depths': 'Blackrock Depths'
+    };
+    return raidNames[raidKey] || raidKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  }
+
   getClassNameFromId(classId) {
     const classMap = {
       1: 'Warrior',
