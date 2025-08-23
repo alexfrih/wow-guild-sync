@@ -306,6 +306,27 @@ class DatabaseService {
     return result.count;
   }
 
+  async forceAllCharactersNeedSync() {
+    return new Promise((resolve, reject) => {
+      const sql = `
+        UPDATE guild_members 
+        SET last_updated = datetime('now', '-2 hours')
+        WHERE is_active = 1
+      `;
+      
+      this.db.run(sql, function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({
+            characters_marked: this.changes,
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
+    });
+  }
+
   async resetAllData() {
     return new Promise((resolve, reject) => {
       // Get current counts before reset
