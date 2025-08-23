@@ -37,93 +37,124 @@ class PlayerSyncService {
 
   async syncWowData({ name, realm, region }) {
     try {
-      // Rate limiting
-      if (this.config?.guild?.rateLimit?.blizzard) {
-        await this.sleep(this.config.guild.rateLimit.blizzard);
+      // Rate limiting for Raider.IO (primary data source)
+      if (this.config?.guild?.rateLimit?.raiderIO) {
+        await this.sleep(this.config.guild.rateLimit.raiderIO);
       }
-      
-      const token = await this.getBlizzardToken();
-      const normalizedRealm = encodeURIComponent(realm.toLowerCase());
-      const normalizedName = encodeURIComponent(name.toLowerCase());
-      const baseUrl = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}`;
       
       this.logger.info(`Syncing WoW data for: ${name} from ${realm}-${region}`);
       
-      // Get basic character info
-      const characterResponse = await axios.get(`${baseUrl}?namespace=profile-${region}&locale=en_US`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
+      let characterClass = 'Unknown';
+      let level = 0;
+      let itemLevel = 0;
       let mythicPlusScore = 0;
       
       try {
-        // Get M+ scores from Raider.io (much faster and current season accurate)
-        await this.sleep(200); // Minimal delay for Raider.io
-        
-        const raiderUrl = `https://raider.io/api/v1/characters/profile?region=${region}&realm=${realm}&name=${encodeURIComponent(name)}&fields=mythic_plus_scores_by_season:current`;
+        // Get ALL data from Raider.io (item level, class, level, M+ score)
+        const raiderUrl = `https://raider.io/api/v1/characters/profile?region=${region}&realm=${realm}&name=${encodeURIComponent(name)}&fields=gear,mythic_plus_scores_by_season:current`;
         
         const raiderResponse = await axios.get(raiderUrl);
+        const data = raiderResponse.data;
         
-        if (raiderResponse.data.mythic_plus_scores_by_season && raiderResponse.data.mythic_plus_scores_by_season.length > 0) {
-          // Get current season score (should be season-tww-3)
-          const currentSeasonScore = raiderResponse.data.mythic_plus_scores_by_season[0];
+        // Extract character info
+        characterClass = data.class || 'Unknown';
+        level = 80; // Raider.IO doesn't provide level, assume max for indexed characters
+        
+        // Get item level from gear field
+        if (data.gear && data.gear.item_level_equipped) {
+          itemLevel = data.gear.item_level_equipped;
+          this.logger.debug(`Item level for ${name}: ${itemLevel}`);
+        }
+        
+        // Get M+ score
+        if (data.mythic_plus_scores_by_season && data.mythic_plus_scores_by_season.length > 0) {
+          const currentSeasonScore = data.mythic_plus_scores_by_season[0];
           mythicPlusScore = currentSeasonScore.scores?.all || 0;
-          
-          // Log season info for verification
           this.logger.debug(`M+ for ${name}: ${currentSeasonScore.season}, Score: ${mythicPlusScore}`);
         }
-      } catch (mythicError) {
-        // M+ data might not be available for all characters
-        this.logger.debug(`No M+ data for ${name}: ${mythicError.message}`);
-      }
-
-      // Get current PvP ratings from Blizzard API (including Solo Shuffle)
-      let currentPvpRating = 0;
-      let pvpSource = '';
-      try {
-        await this.sleep(300); // Small delay between API calls
+      } catch (raiderError) {
+        // If Raider.IO fails, fallback to Blizzard API for basic data
+        this.logger.debug(`Raider.IO failed for ${name}, falling back to Blizzard API: ${raiderError.message}`);
         
-        // Get character spec for Solo Shuffle
-        const characterClass = characterResponse.data.character_class?.name?.toLowerCase() || '';
-        const activeSpec = characterResponse.data.active_spec?.name?.toLowerCase() || '';
-        
-        // Prepare PvP brackets including spec-specific Solo Shuffle
-        const pvpBrackets = ['2v2', '3v3', 'rbg'];
-        if (characterClass && activeSpec) {
-          pvpBrackets.push(`shuffle-${characterClass}-${activeSpec}`);
+        // Rate limiting for Blizzard
+        if (this.config?.guild?.rateLimit?.blizzard) {
+          await this.sleep(this.config.guild.rateLimit.blizzard);
         }
         
-        const pvpPromises = pvpBrackets.map(async (bracket) => {
-          try {
-            const pvpResponse = await axios.get(`${baseUrl}/pvp-bracket/${bracket}?namespace=profile-${region}&locale=en_US`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
-            return { bracket, rating: pvpResponse.data.rating || 0 };
-          } catch {
-            return { bracket, rating: 0 };
+        const token = await this.getBlizzardToken();
+        const normalizedRealm = encodeURIComponent(realm.toLowerCase());
+        const normalizedName = encodeURIComponent(name.toLowerCase());
+        const baseUrl = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}`;
+        
+        const characterResponse = await axios.get(`${baseUrl}?namespace=profile-${region}&locale=en_US`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
           }
         });
+        
+        characterClass = characterResponse.data.character_class?.name || 'Unknown';
+        level = characterResponse.data.level || 0;
+        itemLevel = characterResponse.data.equipped_item_level || characterResponse.data.average_item_level || 0;
+      }
 
-        const results = await Promise.all(pvpPromises);
-        const bestResult = results.reduce((best, current) => 
-          current.rating > best.rating ? current : best, { bracket: '', rating: 0 });
-        
-        currentPvpRating = bestResult.rating;
-        pvpSource = bestResult.bracket;
-        
-        if (currentPvpRating > 0) {
-          this.logger.debug(`PvP for ${name}: ${pvpSource} = ${currentPvpRating}`);
+      // Get current PvP ratings from Blizzard API (Solo Shuffle only available here)
+      let currentPvpRating = 0;
+      let pvpSource = '';
+      
+      // Only fetch PvP if we have a Blizzard token (for Solo Shuffle)
+      if (this.blizzardToken) {
+        try {
+          await this.sleep(300); // Small delay between API calls
+          
+          const token = await this.getBlizzardToken();
+          const normalizedRealm = encodeURIComponent(realm.toLowerCase());
+          const normalizedName = encodeURIComponent(name.toLowerCase());
+          const baseUrl = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}`;
+          
+          // Get character spec for Solo Shuffle
+          const specResponse = await axios.get(`${baseUrl}?namespace=profile-${region}&locale=en_US`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          const characterClassName = specResponse.data.character_class?.name?.toLowerCase() || '';
+          const activeSpec = specResponse.data.active_spec?.name?.toLowerCase() || '';
+          
+          // Prepare PvP brackets including spec-specific Solo Shuffle
+          const pvpBrackets = ['2v2', '3v3', 'rbg'];
+          if (characterClassName && activeSpec) {
+            pvpBrackets.push(`shuffle-${characterClassName}-${activeSpec}`);
+          }
+          
+          const pvpPromises = pvpBrackets.map(async (bracket) => {
+            try {
+              const pvpResponse = await axios.get(`${baseUrl}/pvp-bracket/${bracket}?namespace=profile-${region}&locale=en_US`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              return { bracket, rating: pvpResponse.data.rating || 0 };
+            } catch {
+              return { bracket, rating: 0 };
+            }
+          });
+
+          const results = await Promise.all(pvpPromises);
+          const bestResult = results.reduce((best, current) => 
+            current.rating > best.rating ? current : best, { bracket: '', rating: 0 });
+          
+          currentPvpRating = bestResult.rating;
+          pvpSource = bestResult.bracket;
+          
+          if (currentPvpRating > 0) {
+            this.logger.debug(`PvP for ${name}: ${pvpSource} = ${currentPvpRating}`);
+          }
+        } catch (pvpError) {
+          this.logger.debug(`No PvP data for ${name}: ${pvpError.message}`);
         }
-      } catch (pvpError) {
-        this.logger.debug(`No PvP data for ${name}: ${pvpError.message}`);
       }
       
       return {
-        character_class: characterResponse.data.character_class?.name || 'Unknown',
-        level: characterResponse.data.level || 0,
-        item_level: characterResponse.data.equipped_item_level || characterResponse.data.average_item_level || 0,
+        character_class: characterClass,
+        level: level,
+        item_level: itemLevel,
         mythic_plus_score: mythicPlusScore,
         current_pvp_rating: currentPvpRating,
         last_updated: new Date()
