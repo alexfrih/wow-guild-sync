@@ -123,6 +123,28 @@ class HealthServer {
 
     // Manual endpoints removed - all operations are now automated via cron jobs
 
+    // Errors API endpoint
+    this.app.get('/api/errors', async (req, res) => {
+      try {
+        if (!global.guildSyncService) {
+          return res.status(503).json({ error: 'Service not ready' });
+        }
+
+        const limit = parseInt(req.query.limit) || 100;
+        const errors = await global.guildSyncService.db.getSyncErrors(limit);
+        const stats = await global.guildSyncService.db.getErrorStats();
+        
+        res.json({
+          errors,
+          stats,
+          count: errors.length
+        });
+      } catch (error) {
+        Logger.error('Errors endpoint failed:', error.message || error);
+        res.status(500).json({ error: 'Failed to get sync errors', details: error.message });
+      }
+    });
+
 
 
     // Beautiful HTML Documentation endpoint

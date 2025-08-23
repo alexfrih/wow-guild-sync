@@ -229,6 +229,76 @@ class PrismaService {
       ],
     });
   }
+
+  async logSyncError(characterName, realm, errorType, errorMessage, service, urlAttempted = null) {
+    try {
+      await this.prisma.syncError.create({
+        data: {
+          character_name: characterName,
+          realm: realm,
+          error_type: errorType,
+          error_message: errorMessage,
+          service: service,
+          url_attempted: urlAttempted,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to log sync error:', error);
+    }
+  }
+
+  async getSyncErrors(limit = 100) {
+    return await this.prisma.syncError.findMany({
+      orderBy: {
+        timestamp: 'desc',
+      },
+      take: limit,
+    });
+  }
+
+  async getErrorStats() {
+    const total = await this.prisma.syncError.count();
+    const last24h = await this.prisma.syncError.count({
+      where: {
+        timestamp: {
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        },
+      },
+    });
+
+    const errorTypes = await this.prisma.syncError.groupBy({
+      by: ['error_type'],
+      _count: {
+        id: true,
+      },
+      orderBy: {
+        _count: {
+          id: 'desc',
+        },
+      },
+    });
+
+    return {
+      total,
+      last24h,
+      errorTypes: errorTypes.map(et => ({
+        type: et.error_type,
+        count: et._count.id,
+      })),
+    };
+  }
+
+  async clearOldErrors(daysToKeep = 7) {
+    const cutoff = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000);
+    const result = await this.prisma.syncError.deleteMany({
+      where: {
+        timestamp: {
+          lt: cutoff,
+        },
+      },
+    });
+    return result.count;
+  }
 }
 
 module.exports = PrismaService;

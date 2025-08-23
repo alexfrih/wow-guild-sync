@@ -250,6 +250,32 @@ class GuildSyncService {
           errors++;
           this.stats.totalErrors++;
           
+          // Log error to database
+          let errorType = 'unknown_error';
+          let service = 'unknown';
+          let urlAttempted = null;
+
+          if (error.code === 'ERR_BAD_REQUEST' && error.response?.status === 404) {
+            errorType = 'api_404';
+            service = error.config?.url?.includes('raider.io') ? 'raiderio' : 'blizzard';
+            urlAttempted = error.config?.url;
+          } else if (error.code === 'ECONNABORTED') {
+            errorType = 'api_timeout';
+            service = error.config?.url?.includes('raider.io') ? 'raiderio' : 'blizzard';
+            urlAttempted = error.config?.url;
+          } else if (error.message?.includes('JSON')) {
+            errorType = 'parse_error';
+          }
+
+          await this.db.logSyncError(
+            job.character_name,
+            job.realm,
+            errorType,
+            error.message || error.toString(),
+            service,
+            urlAttempted
+          );
+          
           Logger.error(`❌ Error syncing WoW data for ${job.character_name}:`, error.message || error);
           console.error('Full sync error:', error);
         }

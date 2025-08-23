@@ -47,3 +47,16 @@ model DatabaseVersion {
 
   @@map("database_versions")
 }
+
+model SyncError {
+  id             Int      @id @default(autoincrement())
+  character_name String
+  realm          String?
+  error_type     String   // 'api_404', 'api_timeout', 'parse_error', etc.
+  error_message  String
+  service        String   // 'raiderio' or 'blizzard'
+  url_attempted  String?
+  timestamp      DateTime @default(now())
+
+  @@map("sync_errors")
+}
