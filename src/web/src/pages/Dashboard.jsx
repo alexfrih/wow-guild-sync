@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
+import { AlertTriangle, ExternalLink } from 'lucide-react';
 
 function Dashboard() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState(null);
+  const [syncProgress, setSyncProgress] = useState(null);
+  const [errors, setErrors] = useState([]);
 
   useEffect(() => {
     fetchMembers();
+    fetchErrors();
     
     const socket = io();
     
@@ -15,6 +19,18 @@ function Dashboard() {
       console.log('🔄 Members updated via Socket.IO:', data);
       setMembers(data.members);
       setLastSync(data.lastSync);
+    });
+
+    socket.on('syncProgress', (data) => {
+      console.log('📊 Sync progress update:', data);
+      setSyncProgress(data);
+    });
+
+    socket.on('syncComplete', (data) => {
+      console.log('✅ Sync completed:', data);
+      setSyncProgress(null);
+      // Refresh errors after sync completes
+      fetchErrors();
     });
 
     return () => socket.disconnect();
@@ -30,6 +46,28 @@ function Dashboard() {
       console.error('Failed to fetch members:', error);
       setLoading(false);
     }
+  };
+
+  const fetchErrors = async () => {
+    try {
+      const response = await fetch('/api/errors?limit=50');
+      const data = await response.json();
+      setErrors(data.errors || []);
+    } catch (error) {
+      console.error('Failed to fetch errors:', error);
+    }
+  };
+
+  const hasRecentError = (characterName) => {
+    const recent = new Date(Date.now() - 24 * 60 * 60 * 1000); // Last 24 hours
+    return errors.some(error => 
+      error.character_name === characterName && 
+      new Date(error.timestamp) > recent
+    );
+  };
+
+  const getArmoryLink = (characterName, realm) => {
+    return `https://worldofwarcraft.blizzard.com/en-us/character/eu/${realm}/${characterName}`;
   };
 
   const getClassColor = (className) => {
@@ -77,10 +115,27 @@ function Dashboard() {
               <span className="text-zinc-400">Members:</span>{' '}
               <span className="text-orange-500 font-semibold">{members.length}</span>
             </span>
-            {lastSync && (
+            {syncProgress && (
+              <span className="bg-blue-900/50 px-3 py-1 rounded border border-blue-700">
+                <span className="text-blue-400">Syncing:</span>{' '}
+                <span className="text-blue-300 font-semibold">
+                  {syncProgress.current}/{syncProgress.total}
+                </span>
+                {syncProgress.character && (
+                  <span className="text-zinc-400"> - {syncProgress.character}</span>
+                )}
+                {syncProgress.errors > 0 && (
+                  <span className="text-red-400"> ({syncProgress.errors} errors)</span>
+                )}
+              </span>
+            )}
+            {lastSync && !syncProgress && (
               <span className="bg-zinc-800 px-3 py-1 rounded">
                 <span className="text-zinc-400">Last Sync:</span>{' '}
                 <span className="text-green-500">{lastSync.processed} updated</span>
+                {lastSync.duration && (
+                  <span className="text-zinc-400"> ({lastSync.duration}s)</span>
+                )}
                 {lastSync.errors > 0 && (
                   <span className="text-red-400"> ({lastSync.errors} errors)</span>
                 )}
@@ -123,13 +178,29 @@ function Dashboard() {
                   <tr key={`${member.character_name}-${member.realm}`} 
                       className="hover:bg-zinc-700/30 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <span className="text-sm font-medium text-zinc-100">
-                          {member.character_name}
-                        </span>
-                        <span className="ml-2 text-xs text-zinc-500">
-                          {member.realm}
-                        </span>
+                      <div className="flex items-center space-x-2">
+                        <div>
+                          <span className="text-sm font-medium text-zinc-100">
+                            {member.character_name}
+                          </span>
+                          <span className="ml-2 text-xs text-zinc-500">
+                            {member.realm}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          {hasRecentError(member.character_name) && (
+                            <AlertTriangle className="w-4 h-4 text-red-400" title="Recent sync error" />
+                          )}
+                          <a
+                            href={getArmoryLink(member.character_name, member.realm)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-zinc-400 hover:text-orange-400 transition-colors"
+                            title="View on Armory"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

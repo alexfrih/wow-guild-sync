@@ -41,7 +41,6 @@ class PrismaService {
         mythic_plus_score: member.mythic_plus_score,
         current_pvp_rating: member.current_pvp_rating || 0,
         last_updated: new Date(),
-        is_active: true,
       },
       create: {
         character_name: characterName,
@@ -51,7 +50,6 @@ class PrismaService {
         item_level: member.item_level,
         mythic_plus_score: member.mythic_plus_score,
         current_pvp_rating: member.current_pvp_rating || 0,
-        is_active: true,
       },
     });
   }
@@ -73,27 +71,13 @@ class PrismaService {
     });
   }
 
-  async markInactiveMembers() {
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    
-    return await this.prisma.guildMember.updateMany({
-      where: {
-        last_updated: {
-          lt: weekAgo,
-        },
-      },
-      data: {
-        is_active: false,
-      },
-    });
-  }
+  // Removed markInactiveMembers() - was based on invented is_active field
 
   async getNextSyncJobs(limit = 10) {
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     
     return await this.prisma.guildMember.findMany({
       where: {
-        is_active: true,
         OR: [
           { level: null },
           { item_level: null },
@@ -143,9 +127,6 @@ class PrismaService {
     const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
     
     const result = await this.prisma.guildMember.updateMany({
-      where: {
-        is_active: true,
-      },
       data: {
         last_updated: twoHoursAgo,
       },
@@ -209,9 +190,6 @@ class PrismaService {
 
   async getGuildMembers() {
     return await this.prisma.guildMember.findMany({
-      where: {
-        is_active: true,
-      },
       select: {
         character_name: true,
         realm: true,
@@ -221,7 +199,6 @@ class PrismaService {
         mythic_plus_score: true,
         current_pvp_rating: true,
         last_updated: true,
-        is_active: true,
       },
       orderBy: [
         { item_level: 'desc' },

@@ -23,7 +23,6 @@ model GuildMember {
   mythic_plus_score Float?
   current_pvp_rating Int    @default(0)
   last_updated    DateTime @default(now())
-  is_active       Boolean  @default(true)
 
   @@unique([character_name, realm])
   @@map("guild_members")

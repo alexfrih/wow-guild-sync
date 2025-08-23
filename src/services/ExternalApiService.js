@@ -44,7 +44,12 @@ class ExternalApiService {
   }
 
   // ============================================================================
-  // 1. GET MEMBERS
+  // 1. GET GUILD ROSTER FROM BLIZZARD API
+  // 
+  // API: Guild Roster (Blizzard Battle.net API)
+  // WARNING: Official documentation links are currently not accessible
+  // Endpoint: https://{region}.api.blizzard.com/data/wow/guild/{realmSlug}/{nameSlug}/roster
+  // Namespace: profile-{region}
   // ============================================================================
   
   async getMembers(guildName, realm, region) {
@@ -80,7 +85,15 @@ class ExternalApiService {
   }
 
   // ============================================================================
-  // 2. GET MEMBER
+  // 2. GET CHARACTER DATA FROM RAIDER.IO OR BLIZZARD API
+  // 
+  // API 1: Character Profile (Raider.IO API)  
+  // WARNING: Official documentation not accessible via search
+  // Endpoint: https://raider.io/api/v1/characters/profile
+  // 
+  // API 2: Character Profile (Blizzard Battle.net API)
+  // WARNING: Official documentation links are currently not accessible  
+  // Endpoint: https://{region}.api.blizzard.com/profile/wow/character/{realmSlug}/{characterName}
   // ============================================================================
   
   async getMember(name, realm, region, source = 'raiderio') {

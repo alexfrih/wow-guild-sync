@@ -12,12 +12,14 @@ class GuildSyncService {
   constructor(config) {
     this.config = config;
     this.isRunning = false;
+    this.isSyncing = false;
+    this.syncProgress = { current: 0, total: 0, errors: 0 };
     this.stats = {
       totalSynced: 0,
       totalErrors: 0,
       startTime: new Date(),
-      lastDiscovery: null,
-      lastSync: null
+      lastFullSync: null,
+      lastSyncDuration: null
     };
 
     // Initialize services
@@ -25,9 +27,8 @@ class GuildSyncService {
     this.externalApi = new ExternalApiService(config, Logger);
     this.webApi = new WebApiService(config, Logger);
 
-    // Cron jobs
-    this.discoveryJob = null;
-    this.syncJob = null;
+    // Cron job for 30-minute full sync
+    this.fullSyncJob = null;
   }
 
   async start() {
@@ -42,24 +43,15 @@ class GuildSyncService {
       await this.db.cleanupDuplicates();
       Logger.info('🧹 Cleaned up duplicate entries');
 
-      // Fast startup: check if we have data
-      const memberCount = await this.db.getMemberCount();
-      if (memberCount === 0) {
-        Logger.info('🔍 No existing members, running initial guild discovery...');
-        await this.discoverGuildMembers();
-        Logger.info('🔄 Running initial player sync...');
-        await this.processPlayerSync();
-      } else {
-        Logger.info(`🏰 Found ${memberCount} existing members, ready immediately!`);
-      }
-
-      // Schedule guild discovery (every 6 hours by default)
-      this.scheduleGuildDiscovery();
-
-      // Schedule player syncing (continuous)  
-      this.schedulePlayerSync();
-
+      // Set service as running before first sync
       this.isRunning = true;
+
+      // Run initial full sync on startup
+      Logger.info('🚀 Running initial full sync on startup...');
+      await this.runFullSync();
+
+      // Schedule full sync every 30 minutes
+      this.scheduleFullSync();
       Logger.info('🚀 Guild Sync Service started successfully');
 
       // Send startup status to web API
@@ -81,12 +73,9 @@ class GuildSyncService {
 
     this.isRunning = false;
 
-    // Stop cron jobs
-    if (this.discoveryJob) {
-      this.discoveryJob.stop();
-    }
-    if (this.syncJob) {
-      this.syncJob.stop();
+    // Stop cron job
+    if (this.fullSyncJob) {
+      this.fullSyncJob.stop();
     }
 
     // Close database
@@ -95,162 +84,106 @@ class GuildSyncService {
     Logger.info('✅ Guild Sync Service stopped');
   }
 
-  scheduleGuildDiscovery() {
-    // Run every 6 hours (or configured interval)
-    const cronPattern = `0 */${this.config.guild.discoveryIntervalHours} * * *`;
-    
-    Logger.info(`📅 Scheduling guild discovery: every ${this.config.guild.discoveryIntervalHours} hours`);
+  scheduleFullSync() {
+    // Run full sync every 30 minutes
+    Logger.info('📅 Scheduling full sync: every 30 minutes');
 
-    this.discoveryJob = cron.schedule(cronPattern, async () => {
-      await this.discoverGuildMembers();
-    }, {
-      scheduled: false,
-      timezone: 'UTC'
-    });
-
-    this.discoveryJob.start();
-  }
-
-  schedulePlayerSync() {
-    // Run every minute to check for pending syncs
-    Logger.info('📅 Scheduling player sync: every minute');
-
-    this.syncJob = cron.schedule('* * * * *', async () => {
-      if (!this.isRunning) return;
+    this.fullSyncJob = cron.schedule('*/30 * * * *', async () => {
+      if (!this.isRunning || this.isSyncing) {
+        Logger.info('⏭️ Skipping scheduled sync - already running or service stopped');
+        return;
+      }
       
-      await this.processPlayerSync();
+      await this.runFullSync();
     }, {
       scheduled: false,
       timezone: 'UTC'
     });
 
-    this.syncJob.start();
+    this.fullSyncJob.start();
   }
 
-  async discoverGuildMembers() {
+  async runFullSync() {
+    if (this.isSyncing) {
+      Logger.info('⏭️ Full sync already in progress, skipping');
+      return;
+    }
+
+    this.isSyncing = true;
+    const syncStartTime = new Date();
+    Logger.info('🔄 Starting full guild sync...');
+
     try {
-      Logger.info('🔍 Starting guild member discovery...');
-      this.stats.lastDiscovery = new Date();
-
-      const members = await this.externalApi.getMembers(
-        this.config.guild.name,
-        this.config.guild.realm,
-        this.config.guild.region
-      );
-      
-      if (members.length === 0) {
-        Logger.warn('⚠️  No guild members found');
+      // Step 1: Discover current guild members
+      const members = await this.discoverGuildMembers();
+      if (!members || members.length === 0) {
+        Logger.warn('⚠️ No guild members found, skipping sync');
+        this.isSyncing = false;
         return;
       }
 
-      Logger.info(`📋 Discovered ${members.length} guild members`);
+      // Initialize progress tracking
+      this.syncProgress = { current: 0, total: members.length, errors: 0 };
+      Logger.info(`📊 Starting character data sync for ${members.length} members`);
 
-      // Update database with discovered members
-      for (const member of members) {
-        await this.db.upsertGuildMember(member);
-        
-        // Schedule sync jobs for this member
-        await this.db.schedulePlayerSync(
-          member.name, 
-          member.realm, 
-          member.region, 
-          'wow_data'
-        );
-        
-        await this.db.schedulePlayerSync(
-          member.name, 
-          member.realm, 
-          member.region, 
-          'pvp_data'
-        );
+      // Emit initial progress
+      if (global.io) {
+        global.io.emit('syncProgress', {
+          current: 0,
+          total: members.length,
+          errors: 0,
+          status: 'starting'
+        });
       }
 
-      // Mark inactive members
-      await this.db.markInactiveMembers();
+      // Step 2: Sync each character with 1 second delay
+      let syncedCount = 0;
+      let errorCount = 0;
 
-      Logger.info('✅ Guild discovery completed');
-
-      // Update web API
-      await this.webApi.updateStatus({
-        level: 'info',
-        message: `Guild discovery completed: ${members.length} members`,
-        memberCount: members.length
-      });
-
-    } catch (error) {
-      Logger.error('❌ Guild discovery failed:', error.message || error);
-      console.error('Guild discovery full error:', error);
-      
-      await this.webApi.updateStatus({
-        level: 'error',
-        message: `Guild discovery failed: ${error.message}`
-      });
-    }
-  }
-
-  async processPlayerSync() {
-    try {
-      Logger.info('🔄 Processing player sync batch...');
-      
-      // Get next batch of players to sync
-      const jobs = await this.db.getNextSyncJobs(this.config.guild.rateLimit.batchSize);
-      Logger.info(`Found ${jobs.length} players to sync`);
-      
-      if (jobs.length === 0) {
-        return; // No pending jobs
-      }
-
-      Logger.info(`🔄 Processing ${jobs.length} sync jobs...`);
-      this.stats.lastSync = new Date();
-
-      let processed = 0;
-      let errors = 0;
-
-      for (const job of jobs) {
+      for (let i = 0; i < members.length; i++) {
         if (!this.isRunning) break; // Stop if service is shutting down
 
-        try {
-          Logger.debug(`⚙️  Syncing WoW data for ${job.character_name}...`);
+        const member = members[i];
+        this.syncProgress.current = i + 1;
 
-          // Sync WoW character data
+        try {
+          Logger.info(`📊 [${this.syncProgress.current}/${this.syncProgress.total}] Syncing ${member.name}...`);
+
+          // Get character data from API
           const data = await this.externalApi.getMember(
-            job.character_name,
-            job.realm,
+            member.name,
+            member.realm,
             this.config.guild.region,
-            'auto' // Use auto-fallback (Raider.IO first, then Blizzard)
+            'auto'
           );
 
           if (data) {
-            // Log M+ score for debugging
-            Logger.info(`📊 ${job.character_name} - M+ Score: ${data.mythic_plus_score || 0}, iLvl: ${data.item_level || 0}, PvP: ${data.current_pvp_rating || 0}`);
-            
             // Update database with synced data
             await this.db.upsertGuildMember({
-              character_name: job.character_name,
-              realm: job.realm,
-              class: data.character_class,
+              character_name: member.name,
+              realm: member.realm,
+              class: data.character_class || member.class,
               level: data.level,
               item_level: data.item_level,
               mythic_plus_score: data.mythic_plus_score,
               current_pvp_rating: data.current_pvp_rating
             });
 
-            processed++;
+            syncedCount++;
             this.stats.totalSynced++;
-            
-            Logger.info(`✅ WoW data synced for ${job.character_name}`);
+            Logger.info(`✅ [${this.syncProgress.current}/${this.syncProgress.total}] ${member.name} synced successfully`);
           } else {
-            errors++;
+            errorCount++;
             this.stats.totalErrors++;
-            
-            Logger.warn(`⚠️  WoW data sync failed for ${job.character_name}`);
+            Logger.warn(`⚠️ [${this.syncProgress.current}/${this.syncProgress.total}] ${member.name} - no data returned`);
           }
 
         } catch (error) {
-          errors++;
+          errorCount++;
           this.stats.totalErrors++;
-          
-          // Log error to database
+          this.syncProgress.errors = errorCount;
+
+          // Log detailed error
           let errorType = 'unknown_error';
           let service = 'unknown';
           let urlAttempted = null;
@@ -268,78 +201,107 @@ class GuildSyncService {
           }
 
           await this.db.logSyncError(
-            job.character_name,
-            job.realm,
+            member.name,
+            member.realm,
             errorType,
             error.message || error.toString(),
             service,
             urlAttempted
           );
-          
-          Logger.error(`❌ Error syncing WoW data for ${job.character_name}:`, error.message || error);
-          console.error('Full sync error:', error);
+
+          Logger.error(`❌ [${this.syncProgress.current}/${this.syncProgress.total}] Error syncing ${member.name}: ${error.message}`);
+        }
+
+        // Emit progress update
+        if (global.io) {
+          global.io.emit('syncProgress', {
+            current: this.syncProgress.current,
+            total: this.syncProgress.total,
+            errors: errorCount,
+            character: member.name,
+            status: 'syncing'
+          });
+        }
+
+        // Wait 1 second before next character (except for last one)
+        if (i < members.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
 
-      if (processed > 0 || errors > 0) {
-        Logger.info(`📈 Batch complete: ${processed} synced, ${errors} errors`);
-        
-        // Emit Socket.IO events
-        if (global.io) {
-          // Send log event
-          global.io.emit('log', {
-            type: processed > 0 ? 'success' : 'warning',
-            message: `📈 Batch complete: ${processed} synced, ${errors} errors`,
-            timestamp: new Date().toISOString(),
-            stats: {
-              processed,
-              errors,
-              totalSynced: this.stats.totalSynced,
-              totalErrors: this.stats.totalErrors
-            }
-          });
+      // Step 3: Complete sync
+      const syncEndTime = new Date();
+      const duration = Math.round((syncEndTime - syncStartTime) / 1000);
+      
+      this.stats.lastFullSync = syncEndTime;
+      this.stats.lastSyncDuration = duration;
 
-          // Send leaderboard update event if any members were synced
-          if (processed > 0) {
-            try {
-              const updatedMembers = await this.getGuildMembers();
-              global.io.emit('membersUpdated', {
-                members: updatedMembers,
-                count: updatedMembers.length,
-                timestamp: new Date().toISOString(),
-                lastSync: {
-                  processed,
-                  errors
-                }
-              });
-            } catch (error) {
-              Logger.error('Failed to emit members update:', error.message);
-            }
+      Logger.info(`🎉 Full sync completed: ${syncedCount} synced, ${errorCount} errors (${duration}s)`);
+
+      // Emit completion and updated member list
+      if (global.io) {
+        const updatedMembers = await this.getGuildMembers();
+        global.io.emit('syncComplete', {
+          current: this.syncProgress.total,
+          total: this.syncProgress.total,
+          errors: errorCount,
+          duration: duration,
+          status: 'complete'
+        });
+        
+        global.io.emit('membersUpdated', {
+          members: updatedMembers,
+          count: updatedMembers.length,
+          timestamp: new Date().toISOString(),
+          lastSync: {
+            processed: syncedCount,
+            errors: errorCount,
+            duration: duration
           }
-        }
-        
-        // Log metrics
-        Logger.metric('sync_batch_processed', processed);
-        Logger.metric('sync_batch_errors', errors);
-        Logger.metric('sync_total_processed', this.stats.totalSynced);
-        Logger.metric('sync_total_errors', this.stats.totalErrors);
-
-        // Update web API every 10 successful syncs
-        if (this.stats.totalSynced % 10 === 0 && processed > 0) {
-          await this.webApi.updateStatus({
-            level: 'info',
-            message: 'Sync batch completed',
-            stats: this.getStats()
-          });
-        }
+        });
       }
 
     } catch (error) {
-      Logger.error('❌ Player sync batch failed:', error.message || error);
-      console.error('Player sync full error:', error);
+      Logger.error('❌ Full sync failed:', error.message || error);
       this.stats.totalErrors++;
+      
+      if (global.io) {
+        global.io.emit('syncError', {
+          message: `Full sync failed: ${error.message}`,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } finally {
+      this.isSyncing = false;
+      this.syncProgress = { current: 0, total: 0, errors: 0 };
     }
   }
+
+  async discoverGuildMembers() {
+    try {
+      Logger.info('🔍 Discovering current guild members...');
+
+      const members = await this.externalApi.getMembers(
+        this.config.guild.name,
+        this.config.guild.realm,
+        this.config.guild.region
+      );
+      
+      if (members.length === 0) {
+        Logger.warn('⚠️ No guild members found');
+        return [];
+      }
+
+      Logger.info(`📋 Found ${members.length} current guild members`);
+      return members;
+
+    } catch (error) {
+      Logger.error('❌ Guild member discovery failed:', error.message || error);
+      throw error;
+    }
+  }
+
+  // Old processPlayerSync removed - replaced with runFullSync()
 
   getStats() {
     const uptime = Date.now() - this.stats.startTime.getTime();
@@ -350,9 +312,11 @@ class GuildSyncService {
       uptimeMs: uptime,
       uptimeHours: Math.round(uptime / (1000 * 60 * 60) * 100) / 100,
       startTime: this.stats.startTime,
-      lastDiscovery: this.stats.lastDiscovery,
-      lastSync: this.stats.lastSync,
-      isRunning: this.isRunning
+      lastFullSync: this.stats.lastFullSync,
+      lastSyncDuration: this.stats.lastSyncDuration,
+      isRunning: this.isRunning,
+      isSyncing: this.isSyncing,
+      syncProgress: this.isSyncing ? this.syncProgress : null
     };
   }
 
