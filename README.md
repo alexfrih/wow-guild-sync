@@ -1,35 +1,57 @@
-# WoW Guild Sync
+# 🏰 WoW Guild Sync
 
-Simple WoW guild sync app. Set your guild info and run.
+Simple tool that syncs your WoW guild data automatically.
 
-## Setup
+## 🚀 Quick Start
 
-1. Get Blizzard API keys: https://develop.battle.net/
-2. Copy `.env.example` to `.env`
-3. Fill in your guild and API info
-4. Run `npm start`
-
-## Required Config
-
+**Start:**
 ```bash
+docker-compose up -d
+```
+
+**Stop:**
+```bash
+docker-compose down
+```
+
+**Restart:**
+```bash
+docker-compose restart
+```
+
+**View logs:**
+```bash
+docker-compose logs -f
+```
+
+## 📊 Check It's Working
+
+Open http://localhost:3001/health - you should see `"status":"healthy"`
+
+## ⚙️ Setup
+
+Create `.env` file:
+```env
 GUILD_NAME=Your Guild Name
-GUILD_REALM=your-server-name
+GUILD_REALM=your-server-name  
 GUILD_REGION=us
 BLIZZARD_CLIENT_ID=your_client_id
 BLIZZARD_CLIENT_SECRET=your_client_secret
 ```
 
-## Run
+Get API keys from: https://develop.battle.net/
 
+## 🔧 If Something's Wrong
+
+**See what's happening:**
 ```bash
-npm install
-npm start
+docker-compose logs
 ```
 
-Or with Docker:
+**Start over:**
 ```bash
-docker-compose up -d
+docker-compose down
+docker-compose up --build -d
 ```
 
-Data stored in `./data/guild-sync.db`
-Health check: http://localhost:3001/health
+That's it! Once running, it automatically syncs your guild every 6 hours.

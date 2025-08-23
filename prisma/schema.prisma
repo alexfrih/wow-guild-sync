@@ -1,0 +1,49 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../guild_members.db"
+}
+
+model GuildMember {
+  id               Int      @id @default(autoincrement())
+  character_name   String
+  realm           String
+  class           String?
+  level           Int?
+  item_level      Float?
+  mythic_plus_score Float?
+  current_pvp_rating Int    @default(0)
+  last_updated    DateTime @default(now())
+  is_active       Boolean  @default(true)
+
+  @@unique([character_name, realm])
+  @@map("guild_members")
+}
+
+model SyncLog {
+  id             Int      @id @default(autoincrement())
+  timestamp      DateTime @default(now())
+  status         String
+  message        String?
+  character_name String?
+
+  @@map("sync_logs")
+}
+
+model DatabaseVersion {
+  id          Int      @id @default(autoincrement())
+  version     Int
+  applied_at  DateTime @default(now())
+  description String?
+
+  @@map("database_versions")
+}

@@ -68,7 +68,7 @@ class ExternalApiService {
       
       return members.map(member => ({
         name: member.character.name,
-        realm: member.character.realm.name,
+        realm: member.character.realm?.slug || realm, // Use slug for realm name
         level: member.character.level,
         class: member.character.playable_class?.name || 'Unknown'
       }));

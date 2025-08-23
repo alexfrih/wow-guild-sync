@@ -20,7 +20,6 @@ services:
     
     environment:
       - NODE_ENV=production
-      - DATABASE_PATH=/app/data/guild-sync.db
       - HEALTH_CHECK_PORT=3001
     
     # Port mapping

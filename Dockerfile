@@ -4,8 +4,8 @@
 # Build stage
 FROM node:22-alpine AS builder
 
-# Install build dependencies for native modules (sqlite3)
-RUN apk add --no-cache python3 make g++ sqlite
+# Suppress npm update notifications
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
 WORKDIR /app
 
@@ -15,8 +15,15 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install --production
 
+# Copy prisma schema and generate client
+COPY prisma ./prisma
+RUN npx prisma generate
+
 # Runtime stage  
 FROM node:22-alpine AS runtime
+
+# Suppress npm update notifications
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
 # Install runtime dependencies
 RUN apk add --no-cache sqlite tini
@@ -32,6 +39,7 @@ COPY --from=builder /app/node_modules ./node_modules
 
 # Copy application code
 COPY src ./src
+COPY prisma ./prisma
 COPY package.json ./
 
 # Create data directory for SQLite database
@@ -49,7 +57,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 ENTRYPOINT ["/sbin/tini", "--"]
 
 # Start the service
-CMD ["node", "src/index.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && exec node src/index.js"]
 
 # Expose health check port (optional)
 EXPOSE 3001

@@ -3,7 +3,7 @@
  */
 
 const cron = require('node-cron');
-const DatabaseService = require('./DatabaseService');
+const PrismaService = require('./PrismaService');
 const ExternalApiService = require('./ExternalApiService');
 const WebApiService = require('./WebApiService');
 const Logger = require('../utils/Logger');
@@ -21,7 +21,7 @@ class GuildSyncService {
     };
 
     // Initialize services
-    this.db = new DatabaseService(config);
+    this.db = new PrismaService();
     this.externalApi = new ExternalApiService(config, Logger);
     this.webApi = new WebApiService(config, Logger);
 
@@ -328,22 +328,7 @@ class GuildSyncService {
   }
 
   async getGuildMembers() {
-    return new Promise((resolve, reject) => {
-      const sql = `
-        SELECT character_name, realm, class, level, item_level, mythic_plus_score, current_pvp_rating, last_updated, is_active
-        FROM guild_members 
-        WHERE is_active = 1
-        ORDER BY item_level DESC, character_name ASC
-      `;
-      
-      this.db.db.all(sql, (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows || []);
-        }
-      });
-    });
+    return await this.db.getGuildMembers();
   }
 
 }
