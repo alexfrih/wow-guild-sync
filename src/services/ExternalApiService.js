@@ -75,7 +75,8 @@ class ExternalApiService {
         name: member.character.name,
         realm: member.character.realm?.slug || realm, // Use slug for realm name
         level: member.character.level,
-        class: member.character.playable_class?.name || 'Unknown'
+        class: member.character.playable_class?.name || 'Unknown',
+        character_api_url: member.character.key?.href // CRITICAL: Store Blizzard's provided API URL
       }));
       
     } catch (error) {
@@ -96,7 +97,7 @@ class ExternalApiService {
   // Endpoint: https://{region}.api.blizzard.com/profile/wow/character/{realmSlug}/{characterName}
   // ============================================================================
   
-  async getMember(name, realm, region, source = 'raiderio') {
+  async getMember(name, realm, region, source = 'raiderio', characterApiUrl = null) {
     this.logger.info(`📊 Fetching character data for ${name} using ${source.toUpperCase()}`);
     
     if (source === 'raiderio' || source === 'auto') {
@@ -105,14 +106,14 @@ class ExternalApiService {
       } catch (error) {
         if (source === 'auto') {
           this.logger.info(`⚠️ Raider.IO failed for ${name}, trying Blizzard API`);
-          return await this.getMemberFromBlizzard(name, realm, region);
+          return await this.getMemberFromBlizzard(name, realm, region, characterApiUrl);
         }
         throw error;
       }
     }
     
     if (source === 'blizzard') {
-      return await this.getMemberFromBlizzard(name, realm, region);
+      return await this.getMemberFromBlizzard(name, realm, region, characterApiUrl);
     }
     
     throw new Error(`Unknown source: ${source}. Use 'raiderio', 'blizzard', or 'auto'`);
@@ -159,14 +160,23 @@ class ExternalApiService {
   // BLIZZARD API IMPLEMENTATION
   // ============================================================================
   
-  async getMemberFromBlizzard(name, realm, region) {
+  async getMemberFromBlizzard(name, realm, region, characterApiUrl = null) {
     const token = await this.getBlizzardToken();
-    const normalizedRealm = encodeURIComponent(realm.toLowerCase());
-    const normalizedName = encodeURIComponent(name.toLowerCase());
-    const baseUrl = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}`;
+    
+    // Use provided API URL if available, otherwise fall back to manual construction
+    let characterUrl;
+    if (characterApiUrl) {
+      characterUrl = characterApiUrl + '&locale=en_US';
+      this.logger.debug(`🔗 Using provided API URL: ${characterUrl}`);
+    } else {
+      const normalizedRealm = encodeURIComponent(realm.toLowerCase());
+      const normalizedName = encodeURIComponent(name.toLowerCase());
+      characterUrl = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}?namespace=profile-${region}&locale=en_US`;
+      this.logger.debug(`🔧 Using manual URL construction: ${characterUrl}`);
+    }
     
     // Get basic character info
-    const characterResponse = await axios.get(`${baseUrl}?namespace=profile-${region}&locale=en_US`, {
+    const characterResponse = await axios.get(characterUrl, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -181,6 +191,9 @@ class ExternalApiService {
     try {
       const characterClassName = characterResponse.data.character_class?.name?.toLowerCase() || '';
       const activeSpec = characterResponse.data.active_spec?.name?.toLowerCase() || '';
+      
+      // Extract base URL for PvP queries (remove query parameters)
+      const baseUrl = characterUrl.split('?')[0];
       
       const pvpBrackets = ['2v2', '3v3', 'rbg'];
       if (characterClassName && activeSpec) {

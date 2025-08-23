@@ -154,7 +154,8 @@ class GuildSyncService {
             member.name,
             member.realm,
             this.config.guild.region,
-            'auto'
+            'auto',
+            member.character_api_url
           );
 
           if (data) {
