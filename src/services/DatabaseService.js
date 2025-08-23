@@ -166,9 +166,17 @@ class DatabaseService {
   async upsertGuildMember(member) {
     return new Promise((resolve, reject) => {
       const sql = `
-        INSERT OR REPLACE INTO guild_members 
+        INSERT INTO guild_members 
         (character_name, realm, class, level, item_level, mythic_plus_score, current_pvp_rating, last_updated, is_active)
         VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, 1)
+        ON CONFLICT(character_name, realm) DO UPDATE SET
+          class = excluded.class,
+          level = excluded.level,
+          item_level = excluded.item_level,
+          mythic_plus_score = excluded.mythic_plus_score,
+          current_pvp_rating = excluded.current_pvp_rating,
+          last_updated = CURRENT_TIMESTAMP,
+          is_active = 1
       `;
       
       this.db.run(sql, [
