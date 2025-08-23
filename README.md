@@ -41,6 +41,19 @@ BLIZZARD_CLIENT_SECRET=your_client_secret
 
 Get API keys from: https://develop.battle.net/
 
+## 🔄 After Making Code Changes
+
+**Rebuild and restart:**
+```bash
+docker-compose up --build -d
+```
+
+Or step by step:
+```bash
+docker-compose down
+docker-compose up --build -d
+```
+
 ## 🔧 If Something's Wrong
 
 **See what's happening:**
