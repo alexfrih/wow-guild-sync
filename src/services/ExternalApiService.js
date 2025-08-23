@@ -129,10 +129,12 @@ class ExternalApiService {
   // ============================================================================
   
   async getMemberFromRaiderIO(name, realm, region) {
+    console.log(`🚨 ENTERING getMemberFromRaiderIO for ${name}`);
     const url = `https://raider.io/api/v1/characters/profile?region=${region}&realm=${realm}&name=${encodeURIComponent(name)}&fields=gear,mythic_plus_scores_by_season:current,raid_progression`;
     
     const response = await axios.get(url);
     const data = response.data;
+    console.log(`🚨 RAID PROGRESSION DATA:`, JSON.stringify(data.raid_progression, null, 2));
     
     // Extract data
     const characterClass = data.class || 'Unknown';
@@ -150,12 +152,18 @@ class ExternalApiService {
     
     // Extract raid progression
     let raidProgress = null;
+    console.log(`🔍 Checking raid_progression for ${name}:`, !!data.raid_progression);
     if (data.raid_progression) {
-      raidProgress = this.formatRaidProgression(data.raid_progression);
-      this.logger.info(`🏰 Found raid progress for ${name}: ${raidProgress.summary}`);
+      const progressData = this.formatRaidProgression(data.raid_progression);
+      console.log(`🔍 Progress data for ${name}:`, JSON.stringify(progressData, null, 2));
+      raidProgress = progressData.currentRaid ? progressData.currentRaid.progress : null; // Just store the progress part (e.g., "4/8 H")
+      console.log(`🎯 Extracted just progress part: '${raidProgress}'`);
+      console.log(`🏰 CONSOLE: Found raid progress for ${name}: ${raidProgress}`);
+    } else {
+      console.log(`❌ No raid_progression data found for ${name}`);
     }
     
-    this.logger.info(`📈 Raider.IO data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}${raidProgress ? `, Raids: ${raidProgress.summary}` : ''}`);
+    this.logger.info(`📈 Raider.IO data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}${raidProgress ? `, Raids: ${raidProgress}` : ''}`);
     
     return {
       source: 'raiderio',
@@ -164,7 +172,7 @@ class ExternalApiService {
       item_level: itemLevel,
       mythic_plus_score: mythicPlusScore,
       current_pvp_rating: 0, // Raider.IO doesn't have PvP data
-      raid_progress: raidProgress ? JSON.stringify(raidProgress) : null,
+      raid_progress: raidProgress,
       last_updated: new Date()
     };
   }

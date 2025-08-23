@@ -10,7 +10,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:../guild_members.db"
+  url      = "file:/app/data/guild_members.db"
 }
 
 model GuildMember {
