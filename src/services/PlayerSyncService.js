@@ -72,9 +72,11 @@ class PlayerSyncService {
           mythicPlusScore = currentSeasonScore.scores?.all || 0;
           this.logger.debug(`M+ for ${name}: ${currentSeasonScore.season}, Score: ${mythicPlusScore}`);
         }
+        
+        this.logger.info(`✅ Raider.IO success for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}`);
       } catch (raiderError) {
         // If Raider.IO fails, fallback to Blizzard API for basic data
-        this.logger.debug(`Raider.IO failed for ${name}, falling back to Blizzard API: ${raiderError.message}`);
+        this.logger.info(`Raider.IO failed for ${name}, falling back to Blizzard API: ${raiderError.message}`);
         
         // Rate limiting for Blizzard
         if (this.config?.guild?.rateLimit?.blizzard) {
