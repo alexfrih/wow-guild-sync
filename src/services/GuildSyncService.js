@@ -4,8 +4,7 @@
 
 const cron = require('node-cron');
 const DatabaseService = require('./DatabaseService');
-const GuildDiscoveryService = require('./GuildDiscoveryService');
-const PlayerSyncService = require('./PlayerSyncService');
+const ExternalApiService = require('./ExternalApiService');
 const WebApiService = require('./WebApiService');
 const Logger = require('../utils/Logger');
 
@@ -23,8 +22,7 @@ class GuildSyncService {
 
     // Initialize services
     this.db = new DatabaseService(config);
-    this.guildDiscovery = new GuildDiscoveryService(config, Logger);
-    this.playerSync = new PlayerSyncService(config, Logger);
+    this.externalApi = new ExternalApiService(config, Logger);
     this.webApi = new WebApiService(config, Logger);
 
     // Cron jobs
@@ -134,7 +132,11 @@ class GuildSyncService {
       Logger.info('🔍 Starting guild member discovery...');
       this.stats.lastDiscovery = new Date();
 
-      const members = await this.guildDiscovery.discoverGuildMembers();
+      const members = await this.externalApi.getMembers(
+        this.config.guild.name,
+        this.config.guild.realm,
+        this.config.guild.region
+      );
       
       if (members.length === 0) {
         Logger.warn('⚠️  No guild members found');
@@ -211,11 +213,12 @@ class GuildSyncService {
           Logger.debug(`⚙️  Syncing WoW data for ${job.character_name}...`);
 
           // Sync WoW character data
-          const data = await this.playerSync.syncWowData({
-            name: job.character_name,
-            realm: job.realm,
-            region: this.config.guild.region
-          });
+          const data = await this.externalApi.getMember(
+            job.character_name,
+            job.realm,
+            this.config.guild.region,
+            'auto' // Use auto-fallback (Raider.IO first, then Blizzard)
+          );
 
           if (data) {
             // Update database with synced data
