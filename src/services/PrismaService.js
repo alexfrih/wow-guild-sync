@@ -276,6 +276,30 @@ class PrismaService {
     });
     return result.count;
   }
+
+  async getAllMemberNames() {
+    const members = await this.prisma.guildMember.findMany({
+      select: {
+        character_name: true,
+      },
+    });
+    return members.map(member => member.character_name);
+  }
+
+  async removeDepartedMembers(departedMemberNames) {
+    if (departedMemberNames.length === 0) {
+      return 0;
+    }
+
+    const result = await this.prisma.guildMember.deleteMany({
+      where: {
+        character_name: {
+          in: departedMemberNames,
+        },
+      },
+    });
+    return result.count;
+  }
 }
 
 module.exports = PrismaService;

@@ -294,11 +294,46 @@ class GuildSyncService {
       }
 
       Logger.info(`📋 Found ${members.length} current guild members`);
+      
+      // Handle membership changes (new/departed members)
+      await this.handleMembershipChanges(members);
+      
       return members;
 
     } catch (error) {
       Logger.error('❌ Guild member discovery failed:', error.message || error);
       throw error;
+    }
+  }
+
+  async handleMembershipChanges(currentMembers) {
+    try {
+      const currentNames = currentMembers.map(m => m.name);
+      
+      // Get existing members from database
+      const existingNames = await this.db.getAllMemberNames();
+      
+      // Find new and departed members
+      const newMembers = currentNames.filter(name => !existingNames.includes(name));
+      const departedMembers = existingNames.filter(name => !currentNames.includes(name));
+      
+      if (newMembers.length > 0) {
+        Logger.info(`➕ Found ${newMembers.length} new members: ${newMembers.slice(0, 5).join(', ')}${newMembers.length > 5 ? '...' : ''}`);
+      }
+      
+      if (departedMembers.length > 0) {
+        Logger.info(`➖ Found ${departedMembers.length} departed members: ${departedMembers.slice(0, 5).join(', ')}${departedMembers.length > 5 ? '...' : ''}`);
+        const removedCount = await this.db.removeDepartedMembers(departedMembers);
+        Logger.info(`🗑️ Cleaned up ${removedCount} departed members from database`);
+      }
+      
+      if (newMembers.length === 0 && departedMembers.length === 0) {
+        Logger.info('✅ No membership changes detected');
+      }
+      
+    } catch (error) {
+      Logger.error('❌ Failed to handle membership changes:', error.message || error);
+      // Don't throw - continue with sync even if membership change handling fails
     }
   }
 
