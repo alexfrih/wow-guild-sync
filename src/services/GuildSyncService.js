@@ -221,6 +221,9 @@ class GuildSyncService {
           );
 
           if (data) {
+            // Log M+ score for debugging
+            Logger.info(`📊 ${job.character_name} - M+ Score: ${data.mythic_plus_score || 0}, iLvl: ${data.item_level || 0}, PvP: ${data.current_pvp_rating || 0}`);
+            
             // Update database with synced data
             await this.db.upsertGuildMember({
               character_name: job.character_name,
@@ -254,6 +257,40 @@ class GuildSyncService {
 
       if (processed > 0 || errors > 0) {
         Logger.info(`📈 Batch complete: ${processed} synced, ${errors} errors`);
+        
+        // Emit Socket.IO events
+        if (global.io) {
+          // Send log event
+          global.io.emit('log', {
+            type: processed > 0 ? 'success' : 'warning',
+            message: `📈 Batch complete: ${processed} synced, ${errors} errors`,
+            timestamp: new Date().toISOString(),
+            stats: {
+              processed,
+              errors,
+              totalSynced: this.stats.totalSynced,
+              totalErrors: this.stats.totalErrors
+            }
+          });
+
+          // Send leaderboard update event if any members were synced
+          if (processed > 0) {
+            try {
+              const updatedMembers = await this.getGuildMembers();
+              global.io.emit('membersUpdated', {
+                members: updatedMembers,
+                count: updatedMembers.length,
+                timestamp: new Date().toISOString(),
+                lastSync: {
+                  processed,
+                  errors
+                }
+              });
+            } catch (error) {
+              Logger.error('Failed to emit members update:', error.message);
+            }
+          }
+        }
         
         // Log metrics
         Logger.metric('sync_batch_processed', processed);

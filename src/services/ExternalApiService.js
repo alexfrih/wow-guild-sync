@@ -124,9 +124,12 @@ class ExternalApiService {
     if (data.mythic_plus_scores_by_season && data.mythic_plus_scores_by_season.length > 0) {
       const currentSeason = data.mythic_plus_scores_by_season[0];
       mythicPlusScore = currentSeason.scores?.all || 0;
+      this.logger.info(`🎯 Found M+ score for ${name}: ${mythicPlusScore} (Season: ${currentSeason.season || 'current'})`);
+    } else {
+      this.logger.warn(`⚠️ No M+ season data found for ${name}`);
     }
     
-    this.logger.debug(`📈 Raider.IO data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}`);
+    this.logger.info(`📈 Raider.IO data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}`);
     
     return {
       source: 'raiderio',

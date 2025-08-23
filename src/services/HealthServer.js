@@ -4,6 +4,8 @@
 
 const express = require('express');
 const path = require('path');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 const Logger = require('../utils/Logger');
 
 class HealthServer {
@@ -11,6 +13,7 @@ class HealthServer {
     this.port = port;
     this.app = express();
     this.server = null;
+    this.io = null;
   }
 
   async start() {
@@ -118,111 +121,9 @@ class HealthServer {
       }
     });
 
-    // Reset all data endpoint (POST for safety)
-    this.app.post('/api/reset', async (req, res) => {
-      try {
-        if (!global.guildSyncService) {
-          return res.status(503).json({ error: 'Service not ready' });
-        }
+    // Manual endpoints removed - all operations are now automated via cron jobs
 
-        Logger.info('🗑️ Reset data request received');
-        
-        const result = await global.guildSyncService.db.resetAllData();
-        
-        Logger.info('✅ All guild data has been reset');
-        
-        // Auto-trigger guild discovery after reset
-        Logger.info('🔍 Auto-triggering guild discovery after reset...');
-        setTimeout(async () => {
-          try {
-            await global.guildSyncService.discoverGuildMembers();
-          } catch (error) {
-            Logger.error('Auto-discovery after reset failed:', error.message);
-          }
-        }, 1000); // Small delay to ensure response is sent first
-        
-        res.json({
-          success: true,
-          message: 'All guild member data has been reset. Guild discovery has been triggered.',
-          timestamp: new Date().toISOString(),
-          auto_discovery: true,
-          ...result
-        });
-      } catch (error) {
-        Logger.error('Reset endpoint failed:', error.message || error);
-        console.error('Reset endpoint full error:', error);
-        res.status(500).json({ 
-          success: false, 
-          error: 'Failed to reset data', 
-          details: error.message 
-        });
-      }
-    });
 
-    // Manual guild discovery endpoint
-    this.app.post('/api/discover', async (req, res) => {
-      try {
-        if (!global.guildSyncService) {
-          return res.status(503).json({ error: 'Service not ready' });
-        }
-
-        Logger.info('🔍 Manual guild discovery request received');
-        
-        await global.guildSyncService.discoverGuildMembers();
-        
-        res.json({
-          success: true,
-          message: 'Guild discovery has been triggered',
-          timestamp: new Date().toISOString()
-        });
-      } catch (error) {
-        Logger.error('Discovery endpoint failed:', error.message || error);
-        console.error('Discovery endpoint full error:', error);
-        res.status(500).json({ 
-          success: false, 
-          error: 'Failed to trigger guild discovery', 
-          details: error.message 
-        });
-      }
-    });
-
-    // Force sync all characters endpoint
-    this.app.post('/api/force-sync', async (req, res) => {
-      try {
-        if (!global.guildSyncService) {
-          return res.status(503).json({ error: 'Service not ready' });
-        }
-
-        Logger.info('⚡ Force sync all characters request received');
-        
-        // Force update all characters to need sync
-        const result = await global.guildSyncService.db.forceAllCharactersNeedSync();
-        
-        // Trigger immediate sync processing
-        setTimeout(async () => {
-          try {
-            await global.guildSyncService.processPlayerSync();
-          } catch (error) {
-            Logger.error('Force sync processing failed:', error.message);
-          }
-        }, 1000);
-        
-        res.json({
-          success: true,
-          message: `Force sync triggered for ${result.characters_marked} characters. Sync will begin immediately.`,
-          timestamp: new Date().toISOString(),
-          characters_marked: result.characters_marked
-        });
-      } catch (error) {
-        Logger.error('Force sync endpoint failed:', error.message || error);
-        console.error('Force sync endpoint full error:', error);
-        res.status(500).json({ 
-          success: false, 
-          error: 'Failed to trigger force sync', 
-          details: error.message 
-        });
-      }
-    });
 
     // Beautiful HTML Documentation endpoint
     this.app.get('/docs', (req, res) => {
@@ -422,13 +323,35 @@ class HealthServer {
       res.sendFile(path.join(__dirname, '../web/build/index.html'));
     });
 
-    // Start server
+    // Start server with Socket.IO
     return new Promise((resolve, reject) => {
-      this.server = this.app.listen(this.port, (error) => {
+      this.server = createServer(this.app);
+      
+      // Initialize Socket.IO
+      this.io = new Server(this.server, {
+        cors: {
+          origin: "*",
+          methods: ["GET", "POST"]
+        }
+      });
+      
+      // Socket.IO connection handler
+      this.io.on('connection', (socket) => {
+        Logger.info('🔌 New Socket.IO client connected');
+        
+        socket.on('disconnect', () => {
+          Logger.info('🔌 Socket.IO client disconnected');
+        });
+      });
+      
+      // Make io globally accessible for other services
+      global.io = this.io;
+      
+      this.server.listen(this.port, (error) => {
         if (error) {
           reject(error);
         } else {
-          Logger.info(`📊 Health server running on port ${this.port}`);
+          Logger.info(`📊 Health server with Socket.IO running on port ${this.port}`);
           resolve();
         }
       });
@@ -436,6 +359,9 @@ class HealthServer {
   }
 
   async stop() {
+    if (this.io) {
+      this.io.close();
+    }
     if (this.server) {
       return new Promise((resolve) => {
         this.server.close(() => {

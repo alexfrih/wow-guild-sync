@@ -4,24 +4,24 @@ Simple tool that syncs your WoW guild data automatically.
 
 ## 🚀 Quick Start
 
-**Start:**
+### For PRODUCTION (server/live deployment):
 ```bash
-docker-compose up -d
+./deploy.sh
 ```
+This handles everything: builds frontend, creates backups, health checks.
 
-**Stop:**
+### For DEVELOPMENT (your local machine):
 ```bash
-docker-compose down
+docker-compose up --watch
 ```
+Auto-rebuilds when you change code.
 
-**Restart:**
+### Basic Commands:
 ```bash
-docker-compose restart
-```
-
-**View logs:**
-```bash
-docker-compose logs -f
+docker-compose up -d      # Start
+docker-compose down       # Stop  
+docker-compose restart    # Restart
+docker-compose logs -f    # View logs
 ```
 
 ## 📊 Check It's Working
@@ -41,17 +41,30 @@ BLIZZARD_CLIENT_SECRET=your_client_secret
 
 Get API keys from: https://develop.battle.net/
 
-## 🔄 After Making Code Changes
+## 🔄 Automatic Development Mode
 
-**Rebuild and restart:**
+**Start with auto-rebuild on code changes:**
+```bash
+docker-compose up --watch
+```
+This automatically rebuilds when you change files in `src/`
+
+## 🔄 Manual Commands
+
+**After changing CODE (src/ files):**
 ```bash
 docker-compose up --build -d
 ```
 
-Or step by step:
+**Just restart (no code changes):**
+```bash
+docker-compose restart
+```
+
+**After changing CONFIG (.env, docker-compose.yml):**
 ```bash
 docker-compose down
-docker-compose up --build -d
+docker-compose up -d
 ```
 
 ## 🔧 If Something's Wrong

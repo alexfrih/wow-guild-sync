@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Castle, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, Trash2, Search, Zap } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Castle, ChevronUp, ChevronDown, ChevronsUpDown, ScrollText } from 'lucide-react';
+import io from 'socket.io-client';
+import Logs from './Logs';
 
 function App() {
+  const [currentView, setCurrentView] = useState('dashboard');
   const [members, setMembers] = useState([]);
   const [memberCount, setMemberCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [discovering, setDiscovering] = useState(false);
-  const [forceSyncing, setForceSyncing] = useState(false);
+  const [lastSyncInfo, setLastSyncInfo] = useState(null);
+  const socketRef = useRef(null);
   
   // Sorting state
   const [sortColumn, setSortColumn] = useState(() => 
@@ -139,94 +140,43 @@ function App() {
     }
   };
 
-  const handleReset = async () => {
-    setResetting(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/reset', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) throw new Error('Failed to reset data');
-      
-      const result = await response.json();
-      
-      // Update UI immediately
-      setMembers([]);
-      setMemberCount(0);
-      setShowResetConfirm(false);
-      
-      // Show success message temporarily
-      setError(`✅ Successfully reset ${result.members_deleted} members and ${result.logs_deleted} logs. Guild discovery has been triggered.`);
-      setTimeout(() => setError(null), 8000);
-      
-    } catch (err) {
-      setError(`Reset failed: ${err.message}`);
-    } finally {
-      setResetting(false);
-    }
-  };
-
-  const handleDiscover = async () => {
-    setDiscovering(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/discover', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) throw new Error('Failed to trigger guild discovery');
-      
-      // Show success message temporarily
-      setError('✅ Guild discovery has been triggered. Members will appear shortly.');
-      setTimeout(() => setError(null), 5000);
-      
-    } catch (err) {
-      setError(`Discovery failed: ${err.message}`);
-    } finally {
-      setDiscovering(false);
-    }
-  };
-
-  const handleForceSync = async () => {
-    setForceSyncing(true);
-    setError(null);
-    try {
-      const response = await fetch('/api/force-sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!response.ok) throw new Error('Failed to trigger force sync');
-      
-      const result = await response.json();
-      
-      // Show success message temporarily
-      setError(`⚡ Force sync triggered for ${result.characters_marked} characters. Item levels, M+ scores, and PvP ratings will update shortly.`);
-      setTimeout(() => setError(null), 8000);
-      
-    } catch (err) {
-      setError(`Force sync failed: ${err.message}`);
-    } finally {
-      setForceSyncing(false);
-    }
-  };
 
   useEffect(() => {
     fetchMembers();
-    const interval = setInterval(fetchMembers, 30000); // Auto-refresh every 30 seconds
-    return () => clearInterval(interval);
+    
+    // Connect to Socket.IO for real-time updates
+    socketRef.current = io('/', {
+      transports: ['websocket', 'polling']
+    });
+
+    socketRef.current.on('connect', () => {
+      console.log('Connected to Socket.IO for real-time member updates');
+    });
+
+    socketRef.current.on('membersUpdated', (data) => {
+      console.log('Received real-time member updates:', data.lastSync);
+      setMembers(data.members || []);
+      setMemberCount(data.count || 0);
+      setLastSyncInfo(data.lastSync);
+      setError(null); // Clear any previous errors
+    });
+
+    // Fallback: still refresh every 30 seconds in case Socket.IO fails
+    const interval = setInterval(fetchMembers, 30000);
+    
+    return () => {
+      clearInterval(interval);
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
   }, []);
 
   const sortedMembers = sortMembers(members, sortColumn, sortDirection);
+
+  if (currentView === 'logs') {
+    return <Logs />;
+  }
 
   return (
     <div className="bg-zinc-950 text-zinc-100 min-h-screen">
@@ -240,36 +190,26 @@ function App() {
             </h1>
             <div className="flex justify-center gap-4 flex-wrap">
               <button 
-                className="bg-[#ff8000] hover:bg-orange-600 text-zinc-900 font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2"
-                onClick={fetchMembers}
-                disabled={loading}
+                onClick={() => setCurrentView('dashboard')}
+                className={`font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2 ${
+                  currentView === 'dashboard' 
+                    ? 'bg-[#ff8000] text-zinc-900 hover:bg-orange-600' 
+                    : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-100'
+                }`}
               >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Refresh Data
+                <Castle className="w-4 h-4" />
+                Dashboard
               </button>
               <button 
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2"
-                onClick={handleDiscover}
-                disabled={discovering || loading}
+                onClick={() => setCurrentView('logs')}
+                className={`font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2 ${
+                  currentView === 'logs' 
+                    ? 'bg-[#ff8000] text-zinc-900 hover:bg-orange-600' 
+                    : 'bg-zinc-700 hover:bg-zinc-600 text-zinc-100'
+                }`}
               >
-                <Search className={`w-4 h-4 ${discovering ? 'animate-pulse' : ''}`} />
-                {discovering ? 'Discovering...' : 'Discover Guild'}
-              </button>
-              <button 
-                className="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2"
-                onClick={handleForceSync}
-                disabled={forceSyncing || loading}
-              >
-                <Zap className={`w-4 h-4 ${forceSyncing ? 'animate-bounce' : ''}`} />
-                {forceSyncing ? 'Force Syncing...' : 'Force Sync All'}
-              </button>
-              <button 
-                className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-2 rounded-lg transition-colors duration-200 flex items-center gap-2"
-                onClick={() => setShowResetConfirm(true)}
-                disabled={resetting || loading}
-              >
-                <Trash2 className={`w-4 h-4 ${resetting ? 'animate-pulse' : ''}`} />
-                Reset All Data
+                <ScrollText className="w-4 h-4" />
+                Live Logs
               </button>
               <a 
                 href="/api/members" 
@@ -290,7 +230,7 @@ function App() {
           
           {/* Stats */}
           <div className="p-6 border-b border-zinc-800">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-4 text-center">
                 <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider">Total Members</h3>
                 <p className="text-2xl font-bold text-[#ff8000] mt-2">{memberCount}</p>
@@ -302,6 +242,23 @@ function App() {
               <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-4 text-center">
                 <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider">Region</h3>
                 <p className="text-2xl font-bold text-[#0070dd] mt-2">EU</p>
+              </div>
+              <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-4 text-center">
+                <h3 className="text-zinc-400 text-sm font-medium uppercase tracking-wider">Last Sync</h3>
+                {lastSyncInfo ? (
+                  <div className="mt-2">
+                    <p className="text-lg font-bold text-green-400">
+                      {lastSyncInfo.processed} synced
+                    </p>
+                    {lastSyncInfo.errors > 0 && (
+                      <p className="text-sm text-red-400">
+                        {lastSyncInfo.errors} errors
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-2xl font-bold text-zinc-500 mt-2">-</p>
+                )}
               </div>
             </div>
           </div>
@@ -423,46 +380,6 @@ function App() {
           </div>
         </div>
 
-        {/* Reset Confirmation Dialog */}
-        {showResetConfirm && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-zinc-900 border border-red-600 rounded-lg max-w-md w-full p-6">
-              <h2 className="text-xl font-bold text-red-400 mb-4 flex items-center gap-2">
-                <Trash2 className="w-5 h-5" />
-                ⚠️ Reset All Data
-              </h2>
-              <div className="text-zinc-300 mb-6">
-                <p className="mb-3">
-                  This will <strong className="text-red-400">permanently delete all guild member data</strong> including:
-                </p>
-                <ul className="list-disc list-inside space-y-1 text-sm text-zinc-400 mb-4">
-                  <li>All {memberCount} guild members</li>
-                  <li>All sync history and logs</li>
-                  <li>All character progress data</li>
-                </ul>
-                <div className="bg-green-900/20 border border-green-800 rounded p-3 text-green-300">
-                  <strong>Good news:</strong> After reset, guild discovery will be automatically triggered to reload all members immediately.
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition-colors duration-200"
-                  onClick={handleReset}
-                  disabled={resetting}
-                >
-                  {resetting ? 'Resetting...' : 'Yes, Delete Everything'}
-                </button>
-                <button
-                  className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-semibold py-2 px-4 rounded transition-colors duration-200"
-                  onClick={() => setShowResetConfirm(false)}
-                  disabled={resetting}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
