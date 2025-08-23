@@ -75,10 +75,8 @@ fi
 # Build React app with Vite
 print_status "Building React frontend with Vite..."
 cd src/web
-if [ ! -d node_modules ]; then
-    print_status "Installing npm dependencies..."
-    npm install
-fi
+print_status "Installing/updating npm dependencies..."
+npm install
 npm run build
 cd ../..
 print_success "Frontend built"
