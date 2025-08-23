@@ -71,11 +71,16 @@ class ExternalApiService {
       const members = response.data.members || [];
       this.logger.info(`✅ Found ${members.length} guild members`);
       
+      // Debug: Log first member structure to understand API response
+      if (members.length > 0) {
+        this.logger.info(`🔍 Sample member structure: ${JSON.stringify(members[0], null, 2)}`);
+      }
+      
       return members.map(member => ({
         name: member.character.name,
         realm: member.character.realm?.slug || realm, // Use slug for realm name
         level: member.character.level,
-        class: member.character.playable_class?.name || 'Unknown',
+        class: this.getClassNameFromId(member.character.playable_class?.id) || 'Unknown',
         character_api_url: member.character.key?.href // CRITICAL: Store Blizzard's provided API URL
       }));
       
@@ -232,8 +237,133 @@ class ExternalApiService {
   }
 
   // ============================================================================
+  // ACTIVITY CHECKING METHODS
+  // ============================================================================
+  
+  async getLastLoginTimestamp(name, realm, region) {
+    try {
+      const token = await this.getBlizzardToken();
+      const normalizedRealm = encodeURIComponent(realm.toLowerCase());
+      const normalizedName = encodeURIComponent(name.toLowerCase());
+      const url = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}?namespace=profile-${region}&locale=en_US`;
+      
+      const axios = require('axios');
+      const response = await axios.get(url, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        timeout: 10000
+      });
+      
+      const data = response.data;
+      if (data.last_login_timestamp) {
+        const lastLogin = new Date(data.last_login_timestamp);
+        const now = new Date();
+        const daysSince = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
+        
+        let activityStatus;
+        if (daysSince <= 7) {
+          activityStatus = 'active';
+        } else if (daysSince <= 30) {
+          activityStatus = 'casual';
+        } else {
+          activityStatus = 'inactive';
+        }
+        
+        return {
+          last_login_timestamp: data.last_login_timestamp,
+          activity_status: activityStatus,
+          days_since_login: daysSince
+        };
+      } else {
+        return {
+          last_login_timestamp: null,
+          activity_status: 'unknown',
+          days_since_login: null
+        };
+      }
+      
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return {
+          last_login_timestamp: null,
+          activity_status: 'unknown',
+          days_since_login: null,
+          error: 'character_not_found'
+        };
+      }
+      throw error;
+    }
+  }
+
+  async bulkCheckActivity(characters, region) {
+    const results = [];
+    const token = await this.getBlizzardToken();
+    
+    this.logger.info(`🔍 Starting bulk activity check for ${characters.length} characters`);
+    
+    for (let i = 0; i < characters.length; i++) {
+      const char = characters[i];
+      try {
+        this.logger.info(`📊 [${i+1}/${characters.length}] Checking activity for ${char.name} (${char.realm})`);
+        
+        const activityData = await this.getLastLoginTimestamp(char.name, char.realm, region);
+        
+        // Log the result for each character
+        const status = activityData.activity_status;
+        const days = activityData.days_since_login;
+        this.logger.info(`✅ ${char.name}: ${status}${days !== null ? ` (${days} days ago)` : ''}`);
+        
+        results.push({
+          character_name: char.name,
+          realm: char.realm,
+          activityData: activityData
+        });
+        
+      } catch (error) {
+        this.logger.error(`❌ Failed to check activity for ${char.name}: ${error.message}`);
+        results.push({
+          character_name: char.name,
+          realm: char.realm,
+          activityData: {
+            last_login_timestamp: null,
+            activity_status: 'unknown',
+            days_since_login: null,
+            error: error.message
+          }
+        });
+      }
+      
+      // Small delay to avoid rate limiting
+      if (i < characters.length - 1) {
+        await this.sleep(200);
+      }
+    }
+    
+    this.logger.info(`✅ Bulk activity check completed: ${results.length} characters processed`);
+    return results;
+  }
+
+  // ============================================================================
   // UTILITY METHODS
   // ============================================================================
+  
+  getClassNameFromId(classId) {
+    const classMap = {
+      1: 'Warrior',
+      2: 'Paladin',
+      3: 'Hunter',
+      4: 'Rogue',
+      5: 'Priest',
+      6: 'Death Knight',
+      7: 'Shaman',
+      8: 'Mage',
+      9: 'Warlock',
+      10: 'Monk',
+      11: 'Druid',
+      12: 'Demon Hunter',
+      13: 'Evoker'
+    };
+    return classMap[classId] || null;
+  }
   
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));

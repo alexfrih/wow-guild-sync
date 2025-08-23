@@ -14,15 +14,18 @@ datasource db {
 }
 
 model GuildMember {
-  id               Int      @id @default(autoincrement())
-  character_name   String
-  realm           String
-  class           String?
-  level           Int?
-  item_level      Float?
-  mythic_plus_score Float?
-  current_pvp_rating Int    @default(0)
-  last_updated    DateTime @default(now())
+  id                  Int      @id @default(autoincrement())
+  character_name      String
+  realm              String
+  class              String?
+  level              Int?
+  item_level         Float?
+  mythic_plus_score  Float?
+  current_pvp_rating Int      @default(0)
+  last_login_timestamp BigInt? // Unix timestamp from Blizzard API
+  activity_status    String   @default("unknown") // 'active', 'casual', 'inactive', 'unknown'
+  last_activity_check DateTime @default(now()) // When we last checked their login
+  last_updated       DateTime @default(now())
 
   @@unique([character_name, realm])
   @@map("guild_members")
