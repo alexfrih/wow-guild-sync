@@ -109,7 +109,7 @@ function Dashboard() {
           <h1 className="text-4xl font-bold text-orange-500 mb-2">
             🏰 Pool Party Guild
           </h1>
-          <p className="text-zinc-400 text-lg">Archimonde - US</p>
+          <p className="text-zinc-400 text-lg">Archimonde - EU</p>
           <div className="mt-4 flex justify-center space-x-4 text-sm">
             <span className="bg-zinc-800 px-3 py-1 rounded">
               <span className="text-zinc-400">Members:</span>{' '}
