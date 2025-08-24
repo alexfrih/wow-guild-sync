@@ -217,11 +217,11 @@ class GuildSyncService {
 
     this.isActiveSyncRunning = true;
     const syncStartTime = new Date();
-    Logger.info('🔄 Starting active character sync (14-day window)...');
+    Logger.info('🔄 Starting active character sync (30-day window)...');
 
     try {
-      // Step 1: Get active characters from database (14-day window)
-      const activeMembers = await this.db.getActiveCharacters(14);
+      // Step 1: Get active characters from database (30-day window)
+      const activeMembers = await this.db.getActiveCharacters(30);
       if (!activeMembers || activeMembers.length === 0) {
         Logger.warn('⚠️ No active members found, skipping sync');
         this.isActiveSyncRunning = false;
