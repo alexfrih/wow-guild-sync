@@ -140,10 +140,12 @@ class ExternalApiService {
     const itemLevel = data.gear?.item_level_equipped || 0;
     
     let mythicPlusScore = 0;
+    let currentSaison = null;
     if (data.mythic_plus_scores_by_season && data.mythic_plus_scores_by_season.length > 0) {
       const currentSeason = data.mythic_plus_scores_by_season[0];
       mythicPlusScore = currentSeason.scores?.all || 0;
-      this.logger.info(`🎯 Found M+ score for ${name}: ${mythicPlusScore} (Season: ${currentSeason.season || 'current'})`);
+      currentSaison = currentSeason.season || null;
+      this.logger.info(`🎯 Found M+ score for ${name}: ${mythicPlusScore} (Season: ${currentSaison || 'current'})`);
     } else {
       this.logger.warn(`⚠️ No M+ season data found for ${name}`);
     }
@@ -164,6 +166,7 @@ class ExternalApiService {
       level: level,
       item_level: itemLevel,
       mythic_plus_score: mythicPlusScore,
+      current_saison: currentSaison,
       current_pvp_rating: 0, // Raider.IO doesn't have PvP data
       raid_progress: raidProgress,
       last_updated: new Date()
@@ -240,6 +243,7 @@ class ExternalApiService {
       level: level,
       item_level: itemLevel,
       mythic_plus_score: 0, // Blizzard doesn't provide M+ scores
+      current_saison: null, // Blizzard doesn't provide M+ season data
       current_pvp_rating: currentPvpRating,
       raid_progress: null, // Blizzard API doesn't provide easy raid progression data
       last_updated: new Date()

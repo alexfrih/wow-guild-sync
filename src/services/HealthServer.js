@@ -196,10 +196,12 @@ class HealthServer {
       "activity_status": "active",
       "last_activity_check": "2025-08-23T21:39:38.000Z",
       
-      // Hourly Sync Data
+      // Hourly Sync Data (active characters only - logged in within last 30 days)
       "item_level": 676,
       "mythic_plus_score": 3198,
+      "current_saison": "season-tww-1",
       "raid_progress": "4/8 H",
+      "last_hourly_check": "2025-08-24T11:12:34.000Z",
       
       // Metadata
       "last_updated": "2025-08-22T10:39:38.000Z"
@@ -319,13 +321,15 @@ class HealthServer {
               class: 'string - Character class (e.g., Warrior, Mage)',
               level: 'number - Character level (1-80)',
               last_login_timestamp: 'number - Unix timestamp of last login',
-              activity_status: 'string - Player activity status (active, inactive, unknown)',
+              activity_status: 'string - Player activity status (active, inactive). Active = logged in within last 30 days',
               last_activity_check: 'string - ISO timestamp when activity was last checked',
               
-              // Hourly Sync Data (active characters only)
+              // Hourly Sync Data (active characters only - logged in within last 30 days)
               item_level: 'number - Average item level',
               mythic_plus_score: 'number - Mythic+ rating score',
+              current_saison: 'string - Current M+ season identifier (e.g., "season-tww-1")',
               raid_progress: 'string - Current raid progress (e.g., "4/8 H")',
+              last_hourly_check: 'string - ISO timestamp when hourly sync data was last updated',
               
               // Metadata
               last_updated: 'string - ISO timestamp of last character data sync'
@@ -355,10 +359,12 @@ class HealthServer {
             activity_status: 'active',
             last_activity_check: '2025-08-23T21:39:38.000Z',
             
-            // Hourly Sync Data
+            // Hourly Sync Data (active characters only - logged in within last 30 days)
             item_level: 676,
             mythic_plus_score: 3198,
+            current_saison: 'season-tww-1',
             raid_progress: '4/8 H',
+            last_hourly_check: '2025-08-24T11:12:34.000Z',
             
             // Metadata
             last_updated: '2025-08-22T10:39:38.000Z'
