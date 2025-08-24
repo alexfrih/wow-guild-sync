@@ -270,10 +270,8 @@ class ExternalApiService {
         const daysSince = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
         
         let activityStatus;
-        if (daysSince <= 7) {
+        if (daysSince <= 30) {
           activityStatus = 'active';
-        } else if (daysSince <= 30) {
-          activityStatus = 'casual';
         } else {
           activityStatus = 'inactive';
         }
@@ -286,7 +284,7 @@ class ExternalApiService {
       } else {
         return {
           last_login_timestamp: null,
-          activity_status: 'unknown',
+          activity_status: 'inactive',
           days_since_login: null
         };
       }
@@ -295,7 +293,7 @@ class ExternalApiService {
       if (error.response?.status === 404) {
         return {
           last_login_timestamp: null,
-          activity_status: 'unknown',
+          activity_status: 'inactive',
           days_since_login: null,
           error: 'character_not_found'
         };

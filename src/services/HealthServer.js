@@ -319,7 +319,7 @@ class HealthServer {
               class: 'string - Character class (e.g., Warrior, Mage)',
               level: 'number - Character level (1-80)',
               last_login_timestamp: 'number - Unix timestamp of last login',
-              activity_status: 'string - Player activity status (active, casual, inactive, unknown)',
+              activity_status: 'string - Player activity status (active, inactive, unknown)',
               last_activity_check: 'string - ISO timestamp when activity was last checked',
               
               // Hourly Sync Data (active characters only)

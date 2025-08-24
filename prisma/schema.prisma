@@ -24,7 +24,7 @@ model GuildMember {
   current_pvp_rating Int      @default(0)
   raid_progress      String?  // JSON string storing raid progression data
   last_login_timestamp BigInt? // Unix timestamp from Blizzard API
-  activity_status    String   @default("unknown") // 'active', 'casual', 'inactive', 'unknown'
+  activity_status    String   @default("inactive") // 'active', 'inactive'
   last_activity_check DateTime @default(now()) // When we last checked their login
   last_updated       DateTime @default(now())
 

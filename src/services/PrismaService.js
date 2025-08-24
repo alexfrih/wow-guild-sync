@@ -352,7 +352,7 @@ class PrismaService {
       updateData.last_login_timestamp = activityData.last_login_timestamp;
       updateData.activity_status = activityData.activity_status;
     } else {
-      updateData.activity_status = 'unknown';
+      updateData.activity_status = 'inactive';
     }
 
     return await this.prisma.guildMember.update({

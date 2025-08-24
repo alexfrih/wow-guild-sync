@@ -160,16 +160,19 @@ function Dashboard() {
                     Level
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
+                    Activity Status
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
                     Item Level
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
                     M+ Score
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    PvP Rating
+                    Raid Progress
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    Raid Progress
+                    PvP Rating
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
                     Last Updated
@@ -218,6 +221,15 @@ function Dashboard() {
                       {member.level || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        member.activity_status === 'active' 
+                          ? 'bg-green-900/50 text-green-400 border border-green-700/50' 
+                          : 'bg-red-900/50 text-red-400 border border-red-700/50'
+                      }`}>
+                        {member.activity_status || 'inactive'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {member.item_level ? (
                         <span className={`font-medium ${
                           member.item_level >= 650 ? 'text-purple-400' :
@@ -248,18 +260,18 @@ function Dashboard() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {member.current_pvp_rating && member.current_pvp_rating > 0 ? (
-                        <span className="text-red-400 font-medium">
-                          {member.current_pvp_rating}
+                      {member.raid_progress ? (
+                        <span className="text-amber-400 font-medium">
+                          {member.raid_progress}
                         </span>
                       ) : (
                         <span className="text-zinc-500">-</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {member.raid_progress ? (
-                        <span className="text-amber-400 font-medium">
-                          {member.raid_progress}
+                      {member.current_pvp_rating && member.current_pvp_rating > 0 ? (
+                        <span className="text-red-400 font-medium">
+                          {member.current_pvp_rating}
                         </span>
                       ) : (
                         <span className="text-zinc-500">-</span>
