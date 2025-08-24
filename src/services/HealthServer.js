@@ -227,36 +227,14 @@ class HealthServer {
                         <p class="text-zinc-300">Prometheus metrics endpoint for monitoring and alerting</p>
                     </div>
 
-                    <div class="bg-zinc-800 border border-green-700 rounded-lg p-4">
+                    <div class="bg-zinc-800 border border-zinc-700 rounded-lg p-4">
                         <div class="flex items-center gap-2 mb-2">
-                            <span class="bg-green-600 text-white px-2 py-1 rounded text-xs font-bold">POST</span>
-                            <code class="text-[#69ccf0]">/api/discover</code>
+                            <span class="bg-green-600 text-white px-2 py-1 rounded text-xs font-bold">GET</span>
+                            <code class="text-[#69ccf0]">/api/errors</code>
                         </div>
-                        <p class="text-zinc-300 mb-3">🔍 Manually trigger guild member discovery</p>
-                        <div class="bg-zinc-950 p-3 rounded border border-green-700">
-                            <pre class="text-sm text-green-300"><code>curl -X POST http://localhost:3001/api/discover</code></pre>
-                        </div>
-                    </div>
-
-                    <div class="bg-zinc-800 border border-purple-700 rounded-lg p-4">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="bg-purple-600 text-white px-2 py-1 rounded text-xs font-bold">POST</span>
-                            <code class="text-[#69ccf0]">/api/force-sync</code>
-                        </div>
-                        <p class="text-zinc-300 mb-3">⚡ Force sync all character data (item levels, M+ scores, PvP ratings)</p>
-                        <div class="bg-zinc-950 p-3 rounded border border-purple-700">
-                            <pre class="text-sm text-purple-300"><code>curl -X POST http://localhost:3001/api/force-sync</code></pre>
-                        </div>
-                    </div>
-
-                    <div class="bg-zinc-800 border border-red-700 rounded-lg p-4">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="bg-red-600 text-white px-2 py-1 rounded text-xs font-bold">POST</span>
-                            <code class="text-[#69ccf0]">/api/reset</code>
-                        </div>
-                        <p class="text-zinc-300 mb-3">🗑️ Reset all guild member data (Auto-triggers discovery after reset)</p>
-                        <div class="bg-zinc-950 p-3 rounded border border-red-700">
-                            <pre class="text-sm text-red-300"><code>curl -X POST http://localhost:3001/api/reset</code></pre>
+                        <p class="text-zinc-300 mb-3">🚨 Get recent sync errors and error statistics</p>
+                        <div class="bg-zinc-950 p-3 rounded border border-zinc-700">
+                            <pre class="text-sm text-zinc-300"><code>curl http://localhost:3001/api/errors</code></pre>
                         </div>
                     </div>
                 </div>
