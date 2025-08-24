@@ -274,6 +274,7 @@ class GuildSyncService {
               level: data.level,
               item_level: data.item_level,
               mythic_plus_score: data.mythic_plus_score,
+              current_saison: data.current_saison,
               current_pvp_rating: data.current_pvp_rating,
               raid_progress: data.raid_progress
             });
