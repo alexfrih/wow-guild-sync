@@ -129,12 +129,10 @@ class ExternalApiService {
   // ============================================================================
   
   async getMemberFromRaiderIO(name, realm, region) {
-    console.log(`🚨 ENTERING getMemberFromRaiderIO for ${name}`);
     const url = `https://raider.io/api/v1/characters/profile?region=${region}&realm=${realm}&name=${encodeURIComponent(name)}&fields=gear,mythic_plus_scores_by_season:current,raid_progression`;
     
     const response = await axios.get(url);
     const data = response.data;
-    console.log(`🚨 RAID PROGRESSION DATA:`, JSON.stringify(data.raid_progression, null, 2));
     
     // Extract data
     const characterClass = data.class || 'Unknown';
@@ -152,15 +150,10 @@ class ExternalApiService {
     
     // Extract raid progression
     let raidProgress = null;
-    console.log(`🔍 Checking raid_progression for ${name}:`, !!data.raid_progression);
     if (data.raid_progression) {
       const progressData = this.formatRaidProgression(data.raid_progression);
-      console.log(`🔍 Progress data for ${name}:`, JSON.stringify(progressData, null, 2));
       raidProgress = progressData.currentRaid ? progressData.currentRaid.progress : null; // Just store the progress part (e.g., "4/8 H")
-      console.log(`🎯 Extracted just progress part: '${raidProgress}'`);
-      console.log(`🏰 CONSOLE: Found raid progress for ${name}: ${raidProgress}`);
-    } else {
-      console.log(`❌ No raid_progression data found for ${name}`);
+      this.logger.info(`🏰 Found raid progress for ${name}: ${raidProgress}`);
     }
     
     this.logger.info(`📈 Raider.IO data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}${raidProgress ? `, Raids: ${raidProgress}` : ''}`);

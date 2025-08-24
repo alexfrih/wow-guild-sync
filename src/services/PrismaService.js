@@ -191,7 +191,7 @@ class PrismaService {
   }
 
   async getGuildMembers() {
-    return await this.prisma.guildMember.findMany({
+    const members = await this.prisma.guildMember.findMany({
       select: {
         character_name: true,
         realm: true,
@@ -199,8 +199,10 @@ class PrismaService {
         level: true,
         item_level: true,
         mythic_plus_score: true,
-        current_pvp_rating: true,
         raid_progress: true,
+        last_login_timestamp: true,
+        activity_status: true,
+        last_activity_check: true,
         last_updated: true,
       },
       orderBy: [
@@ -208,6 +210,12 @@ class PrismaService {
         { character_name: 'asc' },
       ],
     });
+    
+    // Convert BigInt to number for JSON serialization
+    return members.map(member => ({
+      ...member,
+      last_login_timestamp: member.last_login_timestamp ? Number(member.last_login_timestamp) : null
+    }));
   }
 
   async logSyncError(characterName, realm, errorType, errorMessage, service, urlAttempted = null) {

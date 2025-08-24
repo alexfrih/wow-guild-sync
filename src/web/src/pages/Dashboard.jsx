@@ -169,6 +169,9 @@ function Dashboard() {
                     PvP Rating
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
+                    Raid Progress
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
                     Last Updated
                   </th>
                 </tr>
@@ -248,6 +251,15 @@ function Dashboard() {
                       {member.current_pvp_rating && member.current_pvp_rating > 0 ? (
                         <span className="text-red-400 font-medium">
                           {member.current_pvp_rating}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {member.raid_progress ? (
+                        <span className="text-amber-400 font-medium">
+                          {member.raid_progress}
                         </span>
                       ) : (
                         <span className="text-zinc-500">-</span>

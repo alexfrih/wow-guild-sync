@@ -187,12 +187,21 @@ class HealthServer {
   "count": 168,
   "members": [
     {
+      // Guild Discovery Data (6h)
       "character_name": "Critter",
       "realm": "Archimonde", 
       "class": "Mage",
       "level": 80,
+      "last_login_timestamp": 1724421578000,
+      "activity_status": "active",
+      "last_activity_check": "2025-08-23T21:39:38.000Z",
+      
+      // Hourly Sync Data
       "item_level": 676,
       "mythic_plus_score": 3198,
+      "raid_progress": "4/8 H",
+      
+      // Metadata
       "last_updated": "2025-08-22T10:39:38.000Z"
     }
   ]
@@ -304,13 +313,22 @@ class HealthServer {
               members: 'array - Array of guild member objects'
             },
             member_object: {
+              // Guild Discovery Data (every 6 hours)
               character_name: 'string - Character name',
               realm: 'string - Server realm',
               class: 'string - Character class (e.g., Warrior, Mage)',
               level: 'number - Character level (1-80)',
+              last_login_timestamp: 'number - Unix timestamp of last login',
+              activity_status: 'string - Player activity status (active, casual, inactive, unknown)',
+              last_activity_check: 'string - ISO timestamp when activity was last checked',
+              
+              // Hourly Sync Data (active characters only)
               item_level: 'number - Average item level',
               mythic_plus_score: 'number - Mythic+ rating score',
-              last_updated: 'string - ISO timestamp of last data sync'
+              raid_progress: 'string - Current raid progress (e.g., "4/8 H")',
+              
+              // Metadata
+              last_updated: 'string - ISO timestamp of last character data sync'
             }
           },
           '/api/docs': {
@@ -328,12 +346,21 @@ class HealthServer {
         },
         examples: {
           member_object: {
+            // Guild Discovery Data (6h)
             character_name: 'Critter',
             realm: 'Archimonde',
             class: 'Death Knight',
             level: 80,
+            last_login_timestamp: 1724421578000,
+            activity_status: 'active',
+            last_activity_check: '2025-08-23T21:39:38.000Z',
+            
+            // Hourly Sync Data
             item_level: 676,
             mythic_plus_score: 3198,
+            raid_progress: '4/8 H',
+            
+            // Metadata
             last_updated: '2025-08-22T10:39:38.000Z'
           }
         }
