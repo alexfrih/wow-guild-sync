@@ -271,7 +271,7 @@ class GuildSyncService {
               character_name: member.character_name,
               realm: member.realm,
               class: data.character_class || member.class,
-              level: data.level,
+              // level: data.level, // Don't update level during hourly sync - keep original from Blizzard
               item_level: data.item_level,
               mythic_plus_score: data.mythic_plus_score,
               current_saison: data.current_saison,
