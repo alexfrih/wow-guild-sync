@@ -276,7 +276,13 @@ class GuildSyncService {
               mythic_plus_score: data.mythic_plus_score,
               current_saison: data.current_saison,
               current_pvp_rating: data.current_pvp_rating,
-              raid_progress: data.raid_progress
+              raid_progress: data.raid_progress,
+              pvp_2v2_rating: data.pvp_2v2_rating || 0,
+              pvp_3v3_rating: data.pvp_3v3_rating || 0,
+              pvp_rbg_rating: data.pvp_rbg_rating || 0,
+              achievement_points: data.achievement_points || 0,
+              solo_shuffle_rating: data.solo_shuffle_rating || 0,
+              max_solo_shuffle_rating: data.max_solo_shuffle_rating || 0
             });
 
             syncedCount++;
@@ -422,7 +428,10 @@ class GuildSyncService {
               level: data.level,
               item_level: data.item_level,
               mythic_plus_score: data.mythic_plus_score,
-              current_pvp_rating: data.current_pvp_rating
+              current_pvp_rating: data.current_pvp_rating,
+              achievement_points: data.achievement_points || 0,
+              solo_shuffle_rating: data.solo_shuffle_rating || 0,
+              max_solo_shuffle_rating: data.max_solo_shuffle_rating || 0
             });
 
             syncedCount++;

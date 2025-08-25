@@ -163,6 +163,9 @@ function Dashboard() {
                     Activity Status
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
+                    Achievement Points
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
                     Item Level
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
@@ -172,7 +175,16 @@ function Dashboard() {
                     Raid Progress
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    PvP Rating
+                    2v2
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
+                    3v3
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
+                    RBG
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
+                    Solo Shuffle
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
                     Last Updated
@@ -230,6 +242,21 @@ function Dashboard() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {member.achievement_points && member.achievement_points > 0 ? (
+                        <span className={`font-medium ${
+                          member.achievement_points >= 30000 ? 'text-purple-400' :
+                          member.achievement_points >= 20000 ? 'text-orange-400' :
+                          member.achievement_points >= 15000 ? 'text-blue-400' :
+                          member.achievement_points >= 10000 ? 'text-green-400' :
+                          'text-zinc-400'
+                        }`}>
+                          {member.achievement_points.toLocaleString()}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {member.item_level ? (
                         <span className={`font-medium ${
                           member.item_level >= 650 ? 'text-purple-400' :
@@ -269,10 +296,68 @@ function Dashboard() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {member.current_pvp_rating && member.current_pvp_rating > 0 ? (
-                        <span className="text-red-400 font-medium">
-                          {member.current_pvp_rating}
+                      {member.pvp_2v2_rating && member.pvp_2v2_rating > 0 ? (
+                        <span className={`font-medium ${
+                          member.pvp_2v2_rating >= 2400 ? 'text-purple-400' :
+                          member.pvp_2v2_rating >= 2100 ? 'text-orange-400' :
+                          member.pvp_2v2_rating >= 1800 ? 'text-blue-400' :
+                          member.pvp_2v2_rating >= 1500 ? 'text-green-400' :
+                          'text-zinc-400'
+                        }`}>
+                          {member.pvp_2v2_rating}
                         </span>
+                      ) : (
+                        <span className="text-zinc-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {member.pvp_3v3_rating && member.pvp_3v3_rating > 0 ? (
+                        <span className={`font-medium ${
+                          member.pvp_3v3_rating >= 2400 ? 'text-purple-400' :
+                          member.pvp_3v3_rating >= 2100 ? 'text-orange-400' :
+                          member.pvp_3v3_rating >= 1800 ? 'text-blue-400' :
+                          member.pvp_3v3_rating >= 1500 ? 'text-green-400' :
+                          'text-zinc-400'
+                        }`}>
+                          {member.pvp_3v3_rating}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {member.pvp_rbg_rating && member.pvp_rbg_rating > 0 ? (
+                        <span className={`font-medium ${
+                          member.pvp_rbg_rating >= 2400 ? 'text-purple-400' :
+                          member.pvp_rbg_rating >= 2100 ? 'text-orange-400' :
+                          member.pvp_rbg_rating >= 1800 ? 'text-blue-400' :
+                          member.pvp_rbg_rating >= 1500 ? 'text-green-400' :
+                          'text-zinc-400'
+                        }`}>
+                          {member.pvp_rbg_rating}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {member.solo_shuffle_rating && member.solo_shuffle_rating > 0 ? (
+                        <div className="flex flex-col">
+                          <span className={`font-medium ${
+                            member.solo_shuffle_rating >= 2400 ? 'text-purple-400' :
+                            member.solo_shuffle_rating >= 2100 ? 'text-orange-400' :
+                            member.solo_shuffle_rating >= 1800 ? 'text-blue-400' :
+                            member.solo_shuffle_rating >= 1500 ? 'text-green-400' :
+                            'text-zinc-400'
+                          }`}>
+                            {member.solo_shuffle_rating}
+                          </span>
+                          {member.max_solo_shuffle_rating && member.max_solo_shuffle_rating > member.solo_shuffle_rating && (
+                            <span className="text-xs text-zinc-500">
+                              Max: {member.max_solo_shuffle_rating}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-zinc-500">-</span>
                       )}

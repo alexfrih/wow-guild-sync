@@ -22,7 +22,21 @@ model GuildMember {
   item_level         Float?
   mythic_plus_score  Float?
   current_saison     String?  // Current M+ season identifier
-  current_pvp_rating Int      @default(0)
+  
+  // PvP Brackets (separate and clear)
+  pvp_2v2_rating     Int?     @default(0)
+  pvp_3v3_rating     Int?     @default(0)
+  pvp_rbg_rating     Int?     @default(0)
+  current_pvp_rating Int      @default(0)  // Keep for backward compatibility
+  
+  // Solo Shuffle (separate specialization)
+  solo_shuffle_rating Int?    @default(0)
+  max_solo_shuffle_rating Int? @default(0)
+  
+  // Achievement Points
+  achievement_points Int?     @default(0)
+  
+  // Raid progression and activity tracking from PR
   raid_progress      String?  // JSON string storing raid progression data
   last_login_timestamp BigInt? // Unix timestamp from Blizzard API
   activity_status    String   @default("inactive") // 'active', 'inactive'

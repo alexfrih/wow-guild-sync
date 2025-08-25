@@ -150,7 +150,7 @@ class ExternalApiService {
       this.logger.warn(`⚠️ No M+ season data found for ${name}`);
     }
     
-    // Extract raid progression
+    // Extract raid progression from PR
     let raidProgress = null;
     if (data.raid_progression) {
       const progressData = this.formatRaidProgression(data.raid_progression);
@@ -158,18 +158,140 @@ class ExternalApiService {
       this.logger.info(`🏰 Found raid progress for ${name}: ${raidProgress}`);
     }
     
-    this.logger.info(`📈 Raider.IO data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}${raidProgress ? `, Raids: ${raidProgress}` : ''}`);
+    // Get additional data from Blizzard API (achievements and PvP)
+    let achievementPoints = 0;
+    let pvp2v2Rating = 0;
+    let pvp3v3Rating = 0;
+    let pvpRbgRating = 0;
+    let soloShuffleRating = 0;
+    let maxSoloShuffleRating = 0;
+    
+    try {
+      const blizzardData = await this.getBlizzardAchievementsAndPvP(name, realm, region, characterClass);
+      achievementPoints = blizzardData.achievement_points;
+      pvp2v2Rating = blizzardData.pvp_2v2_rating;
+      pvp3v3Rating = blizzardData.pvp_3v3_rating;
+      pvpRbgRating = blizzardData.pvp_rbg_rating;
+      soloShuffleRating = blizzardData.solo_shuffle_rating;
+      maxSoloShuffleRating = blizzardData.max_solo_shuffle_rating;
+    } catch (blizzardError) {
+      this.logger.debug(`Could not fetch Blizzard data for ${name}: ${blizzardError.message}`);
+    }
+    
+    this.logger.info(`📈 RaiderIO + Blizzard data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}${raidProgress ? `, Raids: ${raidProgress}` : ''}, PvP(2v2:${pvp2v2Rating}/3v3:${pvp3v3Rating}/RBG:${pvpRbgRating}), Solo:${soloShuffleRating}, Achievements:${achievementPoints}`);
+    
     
     return {
-      source: 'raiderio',
+      source: 'raiderio+blizzard',
       character_class: characterClass,
       level: level,
       item_level: itemLevel,
       mythic_plus_score: mythicPlusScore,
       current_saison: currentSaison,
-      current_pvp_rating: 0, // Raider.IO doesn't have PvP data
+      current_pvp_rating: Math.max(pvp2v2Rating, pvp3v3Rating, pvpRbgRating), // Backward compatibility
       raid_progress: raidProgress,
+      pvp_2v2_rating: pvp2v2Rating,
+      pvp_3v3_rating: pvp3v3Rating,
+      pvp_rbg_rating: pvpRbgRating,
+      solo_shuffle_rating: soloShuffleRating,
+      max_solo_shuffle_rating: maxSoloShuffleRating,
+      achievement_points: achievementPoints,
       last_updated: new Date()
+    };
+  }
+
+  // ============================================================================
+  // BLIZZARD API HELPER METHODS
+  // ============================================================================
+  
+  async getBlizzardAchievementsAndPvP(name, realm, region, characterClass) {
+    const token = await this.getBlizzardToken();
+    const normalizedRealm = encodeURIComponent(realm.toLowerCase());
+    const normalizedName = encodeURIComponent(name.toLowerCase());
+    const baseUrl = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}`;
+    
+    let achievementPoints = 0;
+    let pvp2v2Rating = 0;
+    let pvp3v3Rating = 0;
+    let pvpRbgRating = 0;
+    let soloShuffleRating = 0;
+    let maxSoloShuffleRating = 0;
+    
+    // Get achievement points
+    try {
+      const achievementsResponse = await axios.get(`${baseUrl}/achievements?namespace=profile-${region}&locale=en_US`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      achievementPoints = achievementsResponse.data.total_points || 0;
+      this.logger.debug(`🏆 Achievement points for ${name}: ${achievementPoints}`);
+    } catch (achievementError) {
+      this.logger.debug(`No achievement data for ${name}: ${achievementError.message}`);
+    }
+    
+    // Get character profile for spec info (needed for Solo Shuffle)
+    let activeSpec = '';
+    try {
+      const characterResponse = await axios.get(`${baseUrl}?namespace=profile-${region}&locale=en_US`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      activeSpec = characterResponse.data.active_spec?.name?.toLowerCase() || '';
+    } catch (specError) {
+      this.logger.debug(`Could not get spec for ${name}: ${specError.message}`);
+    }
+    
+    // Get PvP ratings (individual brackets)
+    try {
+      const characterClassName = characterClass.toLowerCase().replace(/\s+/g, '');
+      const soloShuffleBracket = `shuffle-${characterClassName}-${activeSpec}`;
+      
+      // Get each PvP bracket individually
+      try {
+        const pvp2v2Response = await axios.get(`${baseUrl}/pvp-bracket/2v2?namespace=profile-${region}&locale=en_US`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        pvp2v2Rating = pvp2v2Response.data.rating || 0;
+      } catch { pvp2v2Rating = 0; }
+      
+      try {
+        const pvp3v3Response = await axios.get(`${baseUrl}/pvp-bracket/3v3?namespace=profile-${region}&locale=en_US`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        pvp3v3Rating = pvp3v3Response.data.rating || 0;
+      } catch { pvp3v3Rating = 0; }
+      
+      try {
+        const pvpRbgResponse = await axios.get(`${baseUrl}/pvp-bracket/rbg?namespace=profile-${region}&locale=en_US`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        pvpRbgRating = pvpRbgResponse.data.rating || 0;
+      } catch { pvpRbgRating = 0; }
+      
+      // Get Solo Shuffle rating separately
+      if (characterClassName && activeSpec) {
+        try {
+          const shuffleResponse = await axios.get(`${baseUrl}/pvp-bracket/${soloShuffleBracket}?namespace=profile-${region}&locale=en_US`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          soloShuffleRating = shuffleResponse.data.rating || 0;
+          maxSoloShuffleRating = shuffleResponse.data.season_best_rating || soloShuffleRating;
+          this.logger.debug(`🥇 Solo Shuffle for ${name}: ${soloShuffleRating} (best: ${maxSoloShuffleRating})`);
+        } catch (shuffleError) {
+          this.logger.debug(`No Solo Shuffle data for ${name} (${soloShuffleBracket}): ${shuffleError.message}`);
+        }
+      }
+    } catch (pvpError) {
+      this.logger.debug(`No PvP data for ${name}: ${pvpError.message}`);
+    }
+    
+    this.logger.debug(`🏆 PvP brackets for ${name}: 2v2=${pvp2v2Rating}, 3v3=${pvp3v3Rating}, RBG=${pvpRbgRating}, Solo=${soloShuffleRating}`);
+    
+    return {
+      achievement_points: achievementPoints,
+      pvp_2v2_rating: pvp2v2Rating,
+      pvp_3v3_rating: pvp3v3Rating,
+      pvp_rbg_rating: pvpRbgRating,
+      solo_shuffle_rating: soloShuffleRating,
+      max_solo_shuffle_rating: maxSoloShuffleRating
     };
   }
 
@@ -203,8 +325,23 @@ class ExternalApiService {
     const level = characterResponse.data.level || 0;
     const itemLevel = characterResponse.data.equipped_item_level || characterResponse.data.average_item_level || 0;
     
-    // Get PvP ratings
+    // Get achievement points
+    let achievementPoints = 0;
+    try {
+      const achievementsResponse = await axios.get(`${baseUrl}/achievements?namespace=profile-${region}&locale=en_US`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      achievementPoints = achievementsResponse.data.total_points || 0;
+      this.logger.debug(`🏆 Achievement points for ${name}: ${achievementPoints}`);
+    } catch (achievementError) {
+      this.logger.debug(`No achievement data for ${name}: ${achievementError.message}`);
+    }
+    
+    // Get PvP ratings including Solo Shuffle
     let currentPvpRating = 0;
+    let soloShuffleRating = 0;
+    let maxSoloShuffleRating = 0;
+    
     try {
       const characterClassName = characterResponse.data.character_class?.name?.toLowerCase() || '';
       const activeSpec = characterResponse.data.active_spec?.name?.toLowerCase() || '';
@@ -213,10 +350,9 @@ class ExternalApiService {
       const baseUrl = characterUrl.split('?')[0];
       
       const pvpBrackets = ['2v2', '3v3', 'rbg'];
-      if (characterClassName && activeSpec) {
-        pvpBrackets.push(`shuffle-${characterClassName}-${activeSpec}`);
-      }
+      const soloShuffleBracket = `shuffle-${characterClassName}-${activeSpec}`;
       
+      // Get regular PvP ratings
       const pvpPromises = pvpBrackets.map(async (bracket) => {
         try {
           const pvpResponse = await axios.get(`${baseUrl}/pvp-bracket/${bracket}?namespace=profile-${region}&locale=en_US`, {
@@ -231,11 +367,25 @@ class ExternalApiService {
       const ratings = await Promise.all(pvpPromises);
       currentPvpRating = Math.max(...ratings);
       
+      // Get Solo Shuffle rating separately
+      if (characterClassName && activeSpec) {
+        try {
+          const shuffleResponse = await axios.get(`${baseUrl}/pvp-bracket/${soloShuffleBracket}?namespace=profile-${region}&locale=en_US`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          soloShuffleRating = shuffleResponse.data.rating || 0;
+          maxSoloShuffleRating = shuffleResponse.data.season_best_rating || soloShuffleRating;
+          this.logger.debug(`🥇 Solo Shuffle for ${name}: ${soloShuffleRating} (best: ${maxSoloShuffleRating})`);
+        } catch (shuffleError) {
+          this.logger.debug(`No Solo Shuffle data for ${name}: ${shuffleError.message}`);
+        }
+      }
+      
     } catch (pvpError) {
       this.logger.debug(`No PvP data for ${name}: ${pvpError.message}`);
     }
     
-    this.logger.debug(`⚔️ Blizzard data for ${name}: iLvl ${itemLevel}, PvP ${currentPvpRating}`);
+    this.logger.debug(`⚔️ Blizzard data for ${name}: iLvl ${itemLevel}, PvP ${currentPvpRating}, Achievements ${achievementPoints}, Solo Shuffle ${soloShuffleRating}/${maxSoloShuffleRating}`);
     
     return {
       source: 'blizzard',
@@ -246,6 +396,9 @@ class ExternalApiService {
       current_saison: null, // Blizzard doesn't provide M+ season data
       current_pvp_rating: currentPvpRating,
       raid_progress: null, // Blizzard API doesn't provide easy raid progression data
+      achievement_points: achievementPoints,
+      solo_shuffle_rating: soloShuffleRating,
+      max_solo_shuffle_rating: maxSoloShuffleRating,
       last_updated: new Date()
     };
   }

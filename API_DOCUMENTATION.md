@@ -26,13 +26,25 @@ This document details the external APIs used by the WoW Guild Sync application t
   - **Item Level** (equipped_item_level or average_item_level)
   - Active Spec
 
+#### Character Achievements
+- **Endpoint**: `https://{region}.api.blizzard.com/profile/wow/character/{realm}/{character-name}/achievements`
+- **Method**: GET
+- **Headers**: `Authorization: Bearer {token}`
+- **Parameters**: 
+  - `namespace`: profile-{region}
+  - `locale`: en_US
+- **Data Retrieved**:
+  - **Achievement Points** (total_points)
+
 #### PvP Brackets
 - **Endpoint**: `https://{region}.api.blizzard.com/profile/wow/character/{realm}/{character-name}/pvp-bracket/{bracket}`
 - **Method**: GET
 - **Headers**: `Authorization: Bearer {token}`
 - **Brackets**: 2v2, 3v3, rbg, shuffle-{class}-{spec}
 - **Data Retrieved**:
-  - **Current PvP Rating**
+  - **Current PvP Rating** (rating)
+  - **Solo Shuffle Rating** (rating from shuffle bracket)
+  - **Max Solo Shuffle Rating** (season_best_rating from shuffle bracket)
 
 ### 2. Raider.IO API
 
@@ -57,7 +69,10 @@ This document details the external APIs used by the WoW Guild Sync application t
 | Level | Raider.IO (assumed 80) / Blizzard API (fallback) | Character Profile | - / level |
 | **Item Level** | Raider.IO API (primary) / Blizzard API (fallback) | Character Profile with gear field | gear.item_level_equipped / equipped_item_level |
 | **M+ Score** | Raider.IO API | Character M+ Profile | mythic_plus_scores_by_season[0].scores.all |
-| Current PvP Rating | Blizzard API | PvP Brackets | rating (highest from all brackets including Solo Shuffle) |
+| Current PvP Rating | Blizzard API | PvP Brackets | rating (highest from all brackets excluding Solo Shuffle) |
+| **Achievement Points** | Blizzard API | Character Achievements | total_points |
+| **Solo Shuffle Rating** | Blizzard API | PvP Bracket (shuffle) | rating from shuffle-{class}-{spec} bracket |
+| **Max Solo Shuffle Rating** | Blizzard API | PvP Bracket (shuffle) | season_best_rating from shuffle-{class}-{spec} bracket |
 | Last Updated | System | - | Current timestamp |
 
 ## Sync Process Flow (Updated)
@@ -72,11 +87,16 @@ This document details the external APIs used by the WoW Guild Sync application t
    - Fetch character profile for basic data
    - Extract: Class, Level, Item Level
 
-3. **PvP Data - Blizzard API** (for Solo Shuffle support):
-   - Check all PvP brackets (2v2, 3v3, RBG, Solo Shuffle)
-   - Take highest rating across all brackets
+3. **Achievement Data - Blizzard API**:
+   - Fetch character achievements data
+   - Extract: Total achievement points
 
-4. **Database Update**: Store all collected data with timestamp
+4. **PvP Data - Blizzard API** (including Solo Shuffle support):
+   - Check regular PvP brackets (2v2, 3v3, RBG) for general PvP rating
+   - Check Solo Shuffle bracket (shuffle-{class}-{spec}) separately
+   - Extract current rating and season best rating from Solo Shuffle
+
+5. **Database Update**: Store all collected data with timestamp
 
 ## Rate Limiting
 
