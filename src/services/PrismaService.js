@@ -357,9 +357,56 @@ class PrismaService {
         mythic_plus_score: true,
         current_pvp_rating: true,
         raid_progress: true,
+        achievement_points: true,
+        solo_shuffle_rating: true,
+        max_solo_shuffle_rating: true,
         last_login_timestamp: true,
         activity_status: true,
         last_activity_check: true,
+      },
+      orderBy: [
+        { last_login_timestamp: 'desc' },
+        { character_name: 'asc' },
+      ],
+    });
+  }
+
+  async getActiveCharactersWithMissingData(daysActive = 30) {
+    const cutoffDate = new Date(Date.now() - daysActive * 24 * 60 * 60 * 1000);
+    const cutoffTimestamp = cutoffDate.getTime();
+
+    return await this.prisma.guildMember.findMany({
+      where: {
+        // Only active characters with missing achievement or PvP data
+        AND: [
+          {
+            last_login_timestamp: {
+              gte: cutoffTimestamp,
+            },
+          },
+          {
+            OR: [
+              { achievement_points: { equals: null } },
+              { achievement_points: { equals: 0 } },
+              { solo_shuffle_rating: { equals: null } },
+              { item_level: { equals: null } },
+              { mythic_plus_score: { equals: null } },
+            ],
+          },
+        ],
+      },
+      select: {
+        character_name: true,
+        realm: true,
+        level: true,
+        class: true,
+        item_level: true,
+        mythic_plus_score: true,
+        achievement_points: true,
+        solo_shuffle_rating: true,
+        max_solo_shuffle_rating: true,
+        last_login_timestamp: true,
+        activity_status: true,
       },
       orderBy: [
         { last_login_timestamp: 'desc' },

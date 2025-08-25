@@ -1,8 +1,7 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Castle, ScrollText, AlertTriangle } from 'lucide-react';
+import { Castle, AlertTriangle } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
-import Logs from './pages/Logs';
 import Errors from './pages/Errors';
 
 function App() {
@@ -36,17 +35,6 @@ function App() {
                 Dashboard
               </Link>
               
-              <Link
-                to="/logs"
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors duration-200 ${
-                  isActive('/logs')
-                    ? 'bg-orange-600 text-zinc-900'
-                    : 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700'
-                }`}
-              >
-                <ScrollText className="w-4 h-4" />
-                Live Logs
-              </Link>
               
               <Link
                 to="/errors"
@@ -86,7 +74,6 @@ function App() {
       <main>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/logs" element={<Logs />} />
           <Route path="/errors" element={<Errors />} />
         </Routes>
       </main>

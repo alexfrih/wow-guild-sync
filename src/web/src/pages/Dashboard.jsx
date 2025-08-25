@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
-import { AlertTriangle, ExternalLink } from 'lucide-react';
+import { AlertTriangle, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
 
 function Dashboard() {
   const [members, setMembers] = useState([]);
@@ -8,6 +8,10 @@ function Dashboard() {
   const [lastSync, setLastSync] = useState(null);
   const [syncProgress, setSyncProgress] = useState(null);
   const [errors, setErrors] = useState([]);
+  const [sortConfig, setSortConfig] = useState({ 
+    key: 'item_level', 
+    direction: 'desc' 
+  });
 
   useEffect(() => {
     fetchMembers();
@@ -33,8 +37,107 @@ function Dashboard() {
       fetchErrors();
     });
 
+    // New handlers for missing data sync and real-time updates
+    socket.on('missingDataSyncStart', (data) => {
+      console.log('🎯 Missing data sync started:', data);
+      setSyncProgress({
+        current: 0,
+        total: data.total,
+        status: 'starting',
+        type: 'missing_data'
+      });
+    });
+
+    socket.on('memberDataUpdated', (data) => {
+      console.log('📊 Member data updated:', data.character_name, data.data);
+      // Update specific member in the list
+      setMembers(prevMembers => 
+        prevMembers.map(member => 
+          member.character_name === data.character_name && member.realm === data.realm
+            ? { ...member, ...data.data }
+            : member
+        )
+      );
+    });
+
+    socket.on('missingDataSyncComplete', (data) => {
+      console.log('🎉 Missing data sync completed:', data);
+      setSyncProgress(null);
+    });
+
     return () => socket.disconnect();
   }, []);
+
+  const sortMembers = (membersToSort) => {
+    if (!sortConfig.key) return membersToSort;
+
+    return [...membersToSort].sort((a, b) => {
+      const aVal = a[sortConfig.key];
+      const bVal = b[sortConfig.key];
+
+      // Handle null/undefined values
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
+
+      // For numbers, do numeric comparison
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+
+      // For dates
+      if (sortConfig.key === 'last_updated') {
+        const aDate = new Date(aVal);
+        const bDate = new Date(bVal);
+        return sortConfig.direction === 'asc' ? aDate - bDate : bDate - aDate;
+      }
+
+      // For raid progress - Mythic > Heroic > Normal > LFR (no letter)
+      if (sortConfig.key === 'raid_progress') {
+        const raidOrder = { 'M': 4, 'H': 3, 'N': 2, '': 1, null: 0, undefined: 0 };
+        const aRaidLevel = aVal ? aVal.charAt(aVal.length - 1) : '';
+        const bRaidLevel = bVal ? bVal.charAt(bVal.length - 1) : '';
+        const aOrder = raidOrder[aRaidLevel] || (aVal ? 1 : 0); // Default to 1 (LFR) if has value but no recognized letter
+        const bOrder = raidOrder[bRaidLevel] || (bVal ? 1 : 0);
+        
+        if (aOrder !== bOrder) {
+          return sortConfig.direction === 'asc' ? aOrder - bOrder : bOrder - aOrder;
+        }
+        // If same raid level, sort by numeric progress
+        const aNum = parseInt(aVal?.match(/\d+/)?.[0]) || 0;
+        const bNum = parseInt(bVal?.match(/\d+/)?.[0]) || 0;
+        return sortConfig.direction === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+
+      // For strings
+      const aStr = String(aVal).toLowerCase();
+      const bStr = String(bVal).toLowerCase();
+      
+      if (sortConfig.direction === 'asc') {
+        return aStr.localeCompare(bStr);
+      } else {
+        return bStr.localeCompare(aStr);
+      }
+    });
+  };
+
+  const handleSort = (key) => {
+    setSortConfig(prevConfig => ({
+      key,
+      direction: prevConfig.key === key && prevConfig.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
+  const getSortIcon = (columnKey) => {
+    if (sortConfig.key !== columnKey) {
+      return <div className="w-4 h-4" />; // Placeholder for alignment
+    }
+    
+    return sortConfig.direction === 'asc' 
+      ? <ChevronUp className="w-4 h-4 text-blue-400" />
+      : <ChevronDown className="w-4 h-4 text-blue-400" />;
+  };
+
+  const sortedMembers = sortMembers(members);
 
   const fetchMembers = async () => {
     try {
@@ -102,14 +205,17 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 text-zinc-100">
-      <div className="container mx-auto px-6 py-8">
+      <div className="px-6 py-8">
         
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-orange-500 mb-2">
-            🏰 Pool Party Guild
+            🏰 Pool Party Guild ({sortedMembers.length} members)
           </h1>
           <p className="text-zinc-400 text-lg">Archimonde - EU</p>
+          <p className="text-zinc-500 text-sm mt-1">
+            Sorted by {sortConfig.key.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()} ({sortConfig.direction === 'desc' ? 'high to low' : 'low to high'}) • Click any column to sort
+          </p>
           <div className="mt-4 flex justify-center space-x-4 text-sm">
             <span className="bg-zinc-800 px-3 py-1 rounded">
               <span className="text-zinc-400">Members:</span>{' '}
@@ -146,53 +252,131 @@ function Dashboard() {
 
         {/* Members Table */}
         <div className="bg-zinc-800/50 backdrop-blur rounded-lg border border-zinc-700/50 shadow-2xl overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-screen overflow-y-auto">
             <table className="w-full">
-              <thead className="bg-zinc-900/80">
+              <thead className="bg-zinc-900/80 sticky top-0 z-10">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    Character
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('character_name')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Character
+                      {getSortIcon('character_name')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    Class
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('class')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Class
+                      {getSortIcon('class')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    Level
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('level')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Level
+                      {getSortIcon('level')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    Activity Status
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('activity_status')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Activity Status
+                      {getSortIcon('activity_status')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    Achievement Points
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('achievement_points')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Achievement Points
+                      {getSortIcon('achievement_points')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    Item Level
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('item_level')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Item Level
+                      {getSortIcon('item_level')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    M+ Score
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('mythic_plus_score')}
+                  >
+                    <div className="flex items-center gap-1">
+                      M+ Score
+                      {getSortIcon('mythic_plus_score')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    Raid Progress
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('raid_progress')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Raid Progress
+                      {getSortIcon('raid_progress')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    2v2
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('pvp_2v2_rating')}
+                  >
+                    <div className="flex items-center gap-1">
+                      2v2
+                      {getSortIcon('pvp_2v2_rating')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    3v3
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('pvp_3v3_rating')}
+                  >
+                    <div className="flex items-center gap-1">
+                      3v3
+                      {getSortIcon('pvp_3v3_rating')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    RBG
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('pvp_rbg_rating')}
+                  >
+                    <div className="flex items-center gap-1">
+                      RBG
+                      {getSortIcon('pvp_rbg_rating')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    Solo Shuffle
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('solo_shuffle_rating')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Solo Shuffle
+                      {getSortIcon('solo_shuffle_rating')}
+                    </div>
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
-                    Last Updated
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('last_updated')}
+                  >
+                    <div className="flex items-center gap-1">
+                      Last Updated
+                      {getSortIcon('last_updated')}
+                    </div>
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-700/50">
-                {members.map((member, index) => (
+                {sortedMembers.map((member, index) => (
                   <tr key={`${member.character_name}-${member.realm}`} 
                       className="hover:bg-zinc-700/30 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -342,22 +526,15 @@ function Dashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {member.solo_shuffle_rating && member.solo_shuffle_rating > 0 ? (
-                        <div className="flex flex-col">
-                          <span className={`font-medium ${
-                            member.solo_shuffle_rating >= 2400 ? 'text-purple-400' :
-                            member.solo_shuffle_rating >= 2100 ? 'text-orange-400' :
-                            member.solo_shuffle_rating >= 1800 ? 'text-blue-400' :
-                            member.solo_shuffle_rating >= 1500 ? 'text-green-400' :
-                            'text-zinc-400'
-                          }`}>
-                            {member.solo_shuffle_rating}
-                          </span>
-                          {member.max_solo_shuffle_rating && member.max_solo_shuffle_rating > member.solo_shuffle_rating && (
-                            <span className="text-xs text-zinc-500">
-                              Max: {member.max_solo_shuffle_rating}
-                            </span>
-                          )}
-                        </div>
+                        <span className={`font-medium ${
+                          member.solo_shuffle_rating >= 2400 ? 'text-purple-400' :
+                          member.solo_shuffle_rating >= 2100 ? 'text-orange-400' :
+                          member.solo_shuffle_rating >= 1800 ? 'text-blue-400' :
+                          member.solo_shuffle_rating >= 1500 ? 'text-green-400' :
+                          'text-zinc-400'
+                        }`}>
+                          {member.solo_shuffle_rating}
+                        </span>
                       ) : (
                         <span className="text-zinc-500">-</span>
                       )}

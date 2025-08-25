@@ -52,6 +52,10 @@ class GuildSyncService {
       Logger.info('🚀 Running initial guild discovery on startup...');
       await this.runGuildDiscovery();
 
+      // Run immediate sync for active members with missing data
+      Logger.info('🎯 Checking for active members with missing achievement/PvP data...');
+      await this.runMissingDataSync();
+
       // Schedule two-tier sync system
       this.scheduleTwoTierSync();
       Logger.info('🚀 Guild Sync Service started successfully');
@@ -354,6 +358,122 @@ class GuildSyncService {
     } finally {
       this.isActiveSyncRunning = false;
       this.syncProgress = { current: 0, total: 0, errors: 0 };
+    }
+  }
+
+  async runMissingDataSync() {
+    Logger.info('🔍 Starting missing data sync for active members...');
+    
+    try {
+      // Get active members with missing achievement/PvP data
+      const missingDataMembers = await this.db.getActiveCharactersWithMissingData(30);
+      
+      if (!missingDataMembers || missingDataMembers.length === 0) {
+        Logger.info('✅ All active members have complete data');
+        return;
+      }
+
+      Logger.info(`🎯 Found ${missingDataMembers.length} active members with missing data`);
+
+      // Emit start notification
+      if (global.io) {
+        global.io.emit('missingDataSyncStart', {
+          total: missingDataMembers.length,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      let syncedCount = 0;
+      let errorCount = 0;
+
+      for (let i = 0; i < missingDataMembers.length && this.isRunning; i++) {
+        const member = missingDataMembers[i];
+        
+        try {
+          Logger.info(`🔄 [${i+1}/${missingDataMembers.length}] Syncing missing data for ${member.character_name}...`);
+
+          const data = await this.externalApi.getMember(
+            member.character_name,
+            member.realm,
+            this.config.guild.region,
+            'auto'
+          );
+
+          if (data) {
+            await this.db.upsertGuildMember({
+              character_name: member.character_name,
+              realm: member.realm,
+              class: data.character_class || member.class,
+              level: data.level,
+              item_level: data.item_level,
+              mythic_plus_score: data.mythic_plus_score,
+              current_saison: data.current_saison,
+              current_pvp_rating: data.current_pvp_rating,
+              raid_progress: data.raid_progress,
+              pvp_2v2_rating: data.pvp_2v2_rating || 0,
+              pvp_3v3_rating: data.pvp_3v3_rating || 0,
+              pvp_rbg_rating: data.pvp_rbg_rating || 0,
+              achievement_points: data.achievement_points || 0,
+              solo_shuffle_rating: data.solo_shuffle_rating || 0,
+              max_solo_shuffle_rating: data.max_solo_shuffle_rating || 0
+            });
+
+            syncedCount++;
+            Logger.info(`✅ [${i+1}/${missingDataMembers.length}] ${member.character_name} missing data synced`);
+
+            // Real-time update to web dashboard
+            if (global.io) {
+              global.io.emit('memberDataUpdated', {
+                character_name: member.character_name,
+                realm: member.realm,
+                data: {
+                  achievement_points: data.achievement_points || 0,
+                  item_level: data.item_level,
+                  mythic_plus_score: data.mythic_plus_score,
+                  raid_progress: data.raid_progress,
+                  pvp_2v2_rating: data.pvp_2v2_rating || 0,
+                  pvp_3v3_rating: data.pvp_3v3_rating || 0,
+                  pvp_rbg_rating: data.pvp_rbg_rating || 0,
+                  solo_shuffle_rating: data.solo_shuffle_rating || 0,
+                  max_solo_shuffle_rating: data.max_solo_shuffle_rating || 0,
+                  last_updated: new Date()
+                },
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
+        } catch (error) {
+          errorCount++;
+          Logger.error(`❌ [${i+1}/${missingDataMembers.length}] Failed to sync ${member.character_name}: ${error.message}`);
+        }
+
+        // Wait 1 second between characters
+        if (i < missingDataMembers.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      Logger.info(`🎉 Missing data sync completed: ${syncedCount} synced, ${errorCount} errors`);
+
+      // Emit completion with updated member list
+      if (global.io) {
+        const updatedMembers = await this.getGuildMembers();
+        global.io.emit('missingDataSyncComplete', {
+          synced: syncedCount,
+          errors: errorCount,
+          timestamp: new Date().toISOString()
+        });
+
+        global.io.emit('membersUpdated', {
+          members: updatedMembers,
+          count: updatedMembers.length,
+          timestamp: new Date().toISOString(),
+          syncType: 'missing_data'
+        });
+      }
+
+    } catch (error) {
+      Logger.error('❌ Missing data sync failed:', error.message);
     }
   }
 

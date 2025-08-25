@@ -201,6 +201,11 @@ class HealthServer {
       "mythic_plus_score": 3198,
       "current_saison": "season-tww-1",
       "raid_progress": "4/8 H",
+      "pvp_2v2_rating": 1850,
+      "pvp_3v3_rating": 1920,
+      "pvp_rbg_rating": 1780,
+      "solo_shuffle_rating": 1681,
+      "achievement_points": 18750,
       "last_hourly_check": "2025-08-24T11:12:34.000Z",
       
       // Metadata
@@ -307,6 +312,11 @@ class HealthServer {
               mythic_plus_score: 'number - Mythic+ rating score',
               current_saison: 'string - Current M+ season identifier (e.g., "season-tww-1")',
               raid_progress: 'string - Current raid progress (e.g., "4/8 H")',
+              pvp_2v2_rating: 'number - Current 2v2 Arena rating',
+              pvp_3v3_rating: 'number - Current 3v3 Arena rating', 
+              pvp_rbg_rating: 'number - Current Rated Battleground rating',
+              solo_shuffle_rating: 'number - Current Solo Shuffle rating',
+              achievement_points: 'number - Total achievement points earned',
               last_hourly_check: 'string - ISO timestamp when hourly sync data was last updated',
               
               // Metadata
@@ -342,6 +352,11 @@ class HealthServer {
             mythic_plus_score: 3198,
             current_saison: 'season-tww-1',
             raid_progress: '4/8 H',
+            pvp_2v2_rating: 1850,
+            pvp_3v3_rating: 1920,
+            pvp_rbg_rating: 1780,
+            solo_shuffle_rating: 1681,
+            achievement_points: 18750,
             last_hourly_check: '2025-08-24T11:12:34.000Z',
             
             // Metadata
