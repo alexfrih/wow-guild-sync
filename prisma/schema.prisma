@@ -10,19 +10,25 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:../guild_members.db"
+  url      = "file:/app/data/guild_members.db"
 }
 
 model GuildMember {
-  id               Int      @id @default(autoincrement())
-  character_name   String
-  realm           String
-  class           String?
-  level           Int?
-  item_level      Float?
-  mythic_plus_score Float?
-  current_pvp_rating Int    @default(0)
-  last_updated    DateTime @default(now())
+  id                  Int      @id @default(autoincrement())
+  character_name      String
+  realm              String
+  class              String?
+  level              Int?
+  item_level         Float?
+  mythic_plus_score  Float?
+  current_saison     String?  // Current M+ season identifier
+  current_pvp_rating Int      @default(0)
+  raid_progress      String?  // JSON string storing raid progression data
+  last_login_timestamp BigInt? // Unix timestamp from Blizzard API
+  activity_status    String   @default("inactive") // 'active', 'inactive'
+  last_activity_check DateTime @default(now()) // When we last checked their login
+  last_hourly_check  DateTime? // When we last checked hourly sync data (item level, M+, raids)
+  last_updated       DateTime @default(now())
 
   @@unique([character_name, realm])
   @@map("guild_members")

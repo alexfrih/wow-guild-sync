@@ -71,11 +71,17 @@ class ExternalApiService {
       const members = response.data.members || [];
       this.logger.info(`✅ Found ${members.length} guild members`);
       
+      // Debug: Log first member structure to understand API response
+      if (members.length > 0) {
+        this.logger.info(`🔍 Sample member structure: ${JSON.stringify(members[0], null, 2)}`);
+      }
+      
       return members.map(member => ({
         name: member.character.name,
         realm: member.character.realm?.slug || realm, // Use slug for realm name
         level: member.character.level,
-        class: member.character.playable_class?.name || 'Unknown'
+        class: this.getClassNameFromId(member.character.playable_class?.id) || 'Unknown',
+        character_api_url: member.character.key?.href // CRITICAL: Store Blizzard's provided API URL
       }));
       
     } catch (error) {
@@ -96,7 +102,7 @@ class ExternalApiService {
   // Endpoint: https://{region}.api.blizzard.com/profile/wow/character/{realmSlug}/{characterName}
   // ============================================================================
   
-  async getMember(name, realm, region, source = 'raiderio') {
+  async getMember(name, realm, region, source = 'raiderio', characterApiUrl = null) {
     this.logger.info(`📊 Fetching character data for ${name} using ${source.toUpperCase()}`);
     
     if (source === 'raiderio' || source === 'auto') {
@@ -105,14 +111,14 @@ class ExternalApiService {
       } catch (error) {
         if (source === 'auto') {
           this.logger.info(`⚠️ Raider.IO failed for ${name}, trying Blizzard API`);
-          return await this.getMemberFromBlizzard(name, realm, region);
+          return await this.getMemberFromBlizzard(name, realm, region, characterApiUrl);
         }
         throw error;
       }
     }
     
     if (source === 'blizzard') {
-      return await this.getMemberFromBlizzard(name, realm, region);
+      return await this.getMemberFromBlizzard(name, realm, region, characterApiUrl);
     }
     
     throw new Error(`Unknown source: ${source}. Use 'raiderio', 'blizzard', or 'auto'`);
@@ -123,7 +129,7 @@ class ExternalApiService {
   // ============================================================================
   
   async getMemberFromRaiderIO(name, realm, region) {
-    const url = `https://raider.io/api/v1/characters/profile?region=${region}&realm=${realm}&name=${encodeURIComponent(name)}&fields=gear,mythic_plus_scores_by_season:current`;
+    const url = `https://raider.io/api/v1/characters/profile?region=${region}&realm=${realm}&name=${encodeURIComponent(name)}&fields=gear,mythic_plus_scores_by_season:current,raid_progression`;
     
     const response = await axios.get(url);
     const data = response.data;
@@ -134,15 +140,25 @@ class ExternalApiService {
     const itemLevel = data.gear?.item_level_equipped || 0;
     
     let mythicPlusScore = 0;
+    let currentSaison = null;
     if (data.mythic_plus_scores_by_season && data.mythic_plus_scores_by_season.length > 0) {
       const currentSeason = data.mythic_plus_scores_by_season[0];
       mythicPlusScore = currentSeason.scores?.all || 0;
-      this.logger.info(`🎯 Found M+ score for ${name}: ${mythicPlusScore} (Season: ${currentSeason.season || 'current'})`);
+      currentSaison = currentSeason.season || null;
+      this.logger.info(`🎯 Found M+ score for ${name}: ${mythicPlusScore} (Season: ${currentSaison || 'current'})`);
     } else {
       this.logger.warn(`⚠️ No M+ season data found for ${name}`);
     }
     
-    this.logger.info(`📈 Raider.IO data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}`);
+    // Extract raid progression
+    let raidProgress = null;
+    if (data.raid_progression) {
+      const progressData = this.formatRaidProgression(data.raid_progression);
+      raidProgress = progressData.currentRaid ? progressData.currentRaid.progress : null; // Just store the progress part (e.g., "4/8 H")
+      this.logger.info(`🏰 Found raid progress for ${name}: ${raidProgress}`);
+    }
+    
+    this.logger.info(`📈 Raider.IO data for ${name}: iLvl ${itemLevel}, M+ ${mythicPlusScore}${raidProgress ? `, Raids: ${raidProgress}` : ''}`);
     
     return {
       source: 'raiderio',
@@ -150,7 +166,9 @@ class ExternalApiService {
       level: level,
       item_level: itemLevel,
       mythic_plus_score: mythicPlusScore,
+      current_saison: currentSaison,
       current_pvp_rating: 0, // Raider.IO doesn't have PvP data
+      raid_progress: raidProgress,
       last_updated: new Date()
     };
   }
@@ -159,14 +177,23 @@ class ExternalApiService {
   // BLIZZARD API IMPLEMENTATION
   // ============================================================================
   
-  async getMemberFromBlizzard(name, realm, region) {
+  async getMemberFromBlizzard(name, realm, region, characterApiUrl = null) {
     const token = await this.getBlizzardToken();
-    const normalizedRealm = encodeURIComponent(realm.toLowerCase());
-    const normalizedName = encodeURIComponent(name.toLowerCase());
-    const baseUrl = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}`;
+    
+    // Use provided API URL if available, otherwise fall back to manual construction
+    let characterUrl;
+    if (characterApiUrl) {
+      characterUrl = characterApiUrl + '&locale=en_US';
+      this.logger.debug(`🔗 Using provided API URL: ${characterUrl}`);
+    } else {
+      const normalizedRealm = encodeURIComponent(realm.toLowerCase());
+      const normalizedName = encodeURIComponent(name.toLowerCase());
+      characterUrl = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}?namespace=profile-${region}&locale=en_US`;
+      this.logger.debug(`🔧 Using manual URL construction: ${characterUrl}`);
+    }
     
     // Get basic character info
-    const characterResponse = await axios.get(`${baseUrl}?namespace=profile-${region}&locale=en_US`, {
+    const characterResponse = await axios.get(characterUrl, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -181,6 +208,9 @@ class ExternalApiService {
     try {
       const characterClassName = characterResponse.data.character_class?.name?.toLowerCase() || '';
       const activeSpec = characterResponse.data.active_spec?.name?.toLowerCase() || '';
+      
+      // Extract base URL for PvP queries (remove query parameters)
+      const baseUrl = characterUrl.split('?')[0];
       
       const pvpBrackets = ['2v2', '3v3', 'rbg'];
       if (characterClassName && activeSpec) {
@@ -213,14 +243,210 @@ class ExternalApiService {
       level: level,
       item_level: itemLevel,
       mythic_plus_score: 0, // Blizzard doesn't provide M+ scores
+      current_saison: null, // Blizzard doesn't provide M+ season data
       current_pvp_rating: currentPvpRating,
+      raid_progress: null, // Blizzard API doesn't provide easy raid progression data
       last_updated: new Date()
     };
   }
 
   // ============================================================================
+  // ACTIVITY CHECKING METHODS
+  // ============================================================================
+  
+  async getLastLoginTimestamp(name, realm, region) {
+    try {
+      const token = await this.getBlizzardToken();
+      const normalizedRealm = encodeURIComponent(realm.toLowerCase());
+      const normalizedName = encodeURIComponent(name.toLowerCase());
+      const url = `https://${region}.api.blizzard.com/profile/wow/character/${normalizedRealm}/${normalizedName}?namespace=profile-${region}&locale=en_US`;
+      
+      const axios = require('axios');
+      const response = await axios.get(url, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        timeout: 10000
+      });
+      
+      const data = response.data;
+      if (data.last_login_timestamp) {
+        const lastLogin = new Date(data.last_login_timestamp);
+        const now = new Date();
+        const daysSince = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
+        
+        let activityStatus;
+        if (daysSince <= 30) {
+          activityStatus = 'active';
+        } else {
+          activityStatus = 'inactive';
+        }
+        
+        return {
+          last_login_timestamp: data.last_login_timestamp,
+          activity_status: activityStatus,
+          days_since_login: daysSince
+        };
+      } else {
+        return {
+          last_login_timestamp: null,
+          activity_status: 'inactive',
+          days_since_login: null
+        };
+      }
+      
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return {
+          last_login_timestamp: null,
+          activity_status: 'inactive',
+          days_since_login: null,
+          error: 'character_not_found'
+        };
+      }
+      throw error;
+    }
+  }
+
+  async bulkCheckActivity(characters, region) {
+    const results = [];
+    const token = await this.getBlizzardToken();
+    
+    this.logger.info(`🔍 Starting bulk activity check for ${characters.length} characters`);
+    
+    for (let i = 0; i < characters.length; i++) {
+      const char = characters[i];
+      try {
+        this.logger.info(`📊 [${i+1}/${characters.length}] Checking activity for ${char.name} (${char.realm})`);
+        
+        const activityData = await this.getLastLoginTimestamp(char.name, char.realm, region);
+        
+        // Log the result for each character
+        const status = activityData.activity_status;
+        const days = activityData.days_since_login;
+        this.logger.info(`✅ ${char.name}: ${status}${days !== null ? ` (${days} days ago)` : ''}`);
+        
+        results.push({
+          character_name: char.name,
+          realm: char.realm,
+          activityData: activityData
+        });
+        
+      } catch (error) {
+        this.logger.error(`❌ Failed to check activity for ${char.name}: ${error.message}`);
+        results.push({
+          character_name: char.name,
+          realm: char.realm,
+          activityData: {
+            last_login_timestamp: null,
+            activity_status: 'unknown',
+            days_since_login: null,
+            error: error.message
+          }
+        });
+      }
+      
+      // Small delay to avoid rate limiting
+      if (i < characters.length - 1) {
+        await this.sleep(200);
+      }
+    }
+    
+    this.logger.info(`✅ Bulk activity check completed: ${results.length} characters processed`);
+    return results;
+  }
+
+  // ============================================================================
   // UTILITY METHODS
   // ============================================================================
+  
+  formatRaidProgression(raidProgression) {
+    const raids = Object.entries(raidProgression);
+    const allRaids = [];
+    
+    // Current raid priority (most recent/important)
+    const raidPriority = ['manaforge-omega', 'liberation-of-undermine', 'nerubar-palace', 'blackrock-depths'];
+    
+    // Process each raid and extract meaningful progress
+    for (const [raidKey, raidData] of raids) {
+      if (raidData.total_bosses > 0) {
+        const raidName = this.formatRaidName(raidKey);
+        let progress = '';
+        
+        // Build progress summary (prioritize highest difficulty with kills)
+        if (raidData.mythic_bosses_killed > 0) {
+          progress = `${raidData.mythic_bosses_killed}/${raidData.total_bosses} M`;
+        } else if (raidData.heroic_bosses_killed > 0) {
+          progress = `${raidData.heroic_bosses_killed}/${raidData.total_bosses} H`;
+        } else if (raidData.normal_bosses_killed > 0) {
+          progress = `${raidData.normal_bosses_killed}/${raidData.total_bosses} N`;
+        }
+        
+        // Always include raids, even with 0 progress if they're current content
+        const priority = raidPriority.indexOf(raidKey);
+        if (progress || priority === 0) { // Include if has progress OR if it's the current raid (priority 0)
+          if (!progress) {
+            progress = `0/${raidData.total_bosses}`;
+          }
+          allRaids.push({
+            key: raidKey,
+            name: raidName,
+            progress: progress,
+            normal: raidData.normal_bosses_killed,
+            heroic: raidData.heroic_bosses_killed,
+            mythic: raidData.mythic_bosses_killed,
+            total: raidData.total_bosses,
+            priority: priority
+          });
+        }
+      }
+    }
+    
+    // Sort by priority (current raid first)
+    allRaids.sort((a, b) => {
+      if (a.priority === -1 && b.priority === -1) return 0;
+      if (a.priority === -1) return 1;
+      if (b.priority === -1) return -1;
+      return a.priority - b.priority;
+    });
+    
+    // Get current raid progress (highest priority with progress)
+    const currentRaid = allRaids.length > 0 ? allRaids[0] : null;
+    const summary = currentRaid ? `${currentRaid.name}: ${currentRaid.progress}` : 'No progress';
+    
+    return {
+      raids: allRaids,
+      currentRaid: currentRaid,
+      summary: summary
+    };
+  }
+  
+  formatRaidName(raidKey) {
+    const raidNames = {
+      'nerubar-palace': 'Nerub-ar Palace',
+      'liberation-of-undermine': 'Liberation of Undermine',
+      'manaforge-omega': 'Manaforge Omega',
+      'blackrock-depths': 'Blackrock Depths'
+    };
+    return raidNames[raidKey] || raidKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  }
+
+  getClassNameFromId(classId) {
+    const classMap = {
+      1: 'Warrior',
+      2: 'Paladin',
+      3: 'Hunter',
+      4: 'Rogue',
+      5: 'Priest',
+      6: 'Death Knight',
+      7: 'Shaman',
+      8: 'Mage',
+      9: 'Warlock',
+      10: 'Monk',
+      11: 'Druid',
+      12: 'Demon Hunter',
+      13: 'Evoker'
+    };
+    return classMap[classId] || null;
+  }
   
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));

@@ -39,7 +39,10 @@ class PrismaService {
         level: member.level,
         item_level: member.item_level,
         mythic_plus_score: member.mythic_plus_score,
+        current_saison: member.current_saison,
         current_pvp_rating: member.current_pvp_rating || 0,
+        raid_progress: member.raid_progress,
+        last_hourly_check: member.mythic_plus_score !== undefined || member.item_level !== undefined || member.raid_progress !== undefined ? new Date() : undefined,
         last_updated: new Date(),
       },
       create: {
@@ -49,7 +52,10 @@ class PrismaService {
         level: member.level,
         item_level: member.item_level,
         mythic_plus_score: member.mythic_plus_score,
+        current_saison: member.current_saison,
         current_pvp_rating: member.current_pvp_rating || 0,
+        raid_progress: member.raid_progress,
+        last_hourly_check: member.mythic_plus_score !== undefined || member.item_level !== undefined || member.raid_progress !== undefined ? new Date() : undefined,
       },
     });
   }
@@ -189,7 +195,7 @@ class PrismaService {
   }
 
   async getGuildMembers() {
-    return await this.prisma.guildMember.findMany({
+    const members = await this.prisma.guildMember.findMany({
       select: {
         character_name: true,
         realm: true,
@@ -197,7 +203,12 @@ class PrismaService {
         level: true,
         item_level: true,
         mythic_plus_score: true,
-        current_pvp_rating: true,
+        current_saison: true,
+        raid_progress: true,
+        last_login_timestamp: true,
+        activity_status: true,
+        last_activity_check: true,
+        last_hourly_check: true,
         last_updated: true,
       },
       orderBy: [
@@ -205,6 +216,12 @@ class PrismaService {
         { character_name: 'asc' },
       ],
     });
+    
+    // Convert BigInt to number for JSON serialization
+    return members.map(member => ({
+      ...member,
+      last_login_timestamp: member.last_login_timestamp ? Number(member.last_login_timestamp) : null
+    }));
   }
 
   async logSyncError(characterName, realm, errorType, errorMessage, service, urlAttempted = null) {
@@ -275,6 +292,108 @@ class PrismaService {
       },
     });
     return result.count;
+  }
+
+  async getAllMemberNames() {
+    const members = await this.prisma.guildMember.findMany({
+      select: {
+        character_name: true,
+      },
+    });
+    return members.map(member => member.character_name);
+  }
+
+  async removeDepartedMembers(departedMemberNames) {
+    if (departedMemberNames.length === 0) {
+      return 0;
+    }
+
+    const result = await this.prisma.guildMember.deleteMany({
+      where: {
+        character_name: {
+          in: departedMemberNames,
+        },
+      },
+    });
+    return result.count;
+  }
+
+  async getActiveCharacters(daysActive = 14) {
+    const cutoffDate = new Date(Date.now() - daysActive * 24 * 60 * 60 * 1000);
+    const cutoffTimestamp = cutoffDate.getTime();
+
+    return await this.prisma.guildMember.findMany({
+      where: {
+        // Only characters with confirmed activity within the specified days
+        last_login_timestamp: {
+          gte: cutoffTimestamp,
+        },
+      },
+      select: {
+        character_name: true,
+        realm: true,
+        level: true,
+        class: true,
+        item_level: true,
+        mythic_plus_score: true,
+        current_pvp_rating: true,
+        raid_progress: true,
+        last_login_timestamp: true,
+        activity_status: true,
+        last_activity_check: true,
+      },
+      orderBy: [
+        { last_login_timestamp: 'desc' },
+        { character_name: 'asc' },
+      ],
+    });
+  }
+
+  async updateActivityStatus(characterName, realm, activityData) {
+    const updateData = {
+      last_activity_check: new Date(),
+    };
+
+    if (activityData.last_login_timestamp) {
+      updateData.last_login_timestamp = activityData.last_login_timestamp;
+      updateData.activity_status = activityData.activity_status;
+    } else {
+      updateData.activity_status = 'inactive';
+    }
+
+    return await this.prisma.guildMember.update({
+      where: {
+        character_name_realm: {
+          character_name: characterName,
+          realm: realm,
+        },
+      },
+      data: updateData,
+    });
+  }
+
+  async bulkUpdateActivityStatus(updates) {
+    console.log(`🔄 Starting bulk activity status update for ${updates.length} characters`);
+    
+    const promises = updates.map(async (update, index) => {
+      try {
+        console.log(`📝 [${index + 1}/${updates.length}] Updating ${update.character_name} (${update.realm}) - Status: ${update.activityData.activity_status}`);
+        const result = await this.updateActivityStatus(update.character_name, update.realm, update.activityData);
+        console.log(`✅ Updated ${update.character_name}: ${update.activityData.activity_status}`);
+        return result;
+      } catch (error) {
+        console.error(`❌ Failed to update ${update.character_name}: ${error.message}`);
+        throw error;
+      }
+    });
+
+    const results = await Promise.allSettled(promises);
+    
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+    console.log(`📊 Bulk update completed: ${successful} successful, ${failed} failed`);
+    
+    return results;
   }
 }
 

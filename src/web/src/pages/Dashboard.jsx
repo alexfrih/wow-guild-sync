@@ -109,7 +109,7 @@ function Dashboard() {
           <h1 className="text-4xl font-bold text-orange-500 mb-2">
             🏰 Pool Party Guild
           </h1>
-          <p className="text-zinc-400 text-lg">Archimonde - US</p>
+          <p className="text-zinc-400 text-lg">Archimonde - EU</p>
           <div className="mt-4 flex justify-center space-x-4 text-sm">
             <span className="bg-zinc-800 px-3 py-1 rounded">
               <span className="text-zinc-400">Members:</span>{' '}
@@ -160,10 +160,16 @@ function Dashboard() {
                     Level
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
+                    Activity Status
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
                     Item Level
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
                     M+ Score
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
+                    Raid Progress
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider">
                     PvP Rating
@@ -215,6 +221,15 @@ function Dashboard() {
                       {member.level || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        member.activity_status === 'active' 
+                          ? 'bg-green-900/50 text-green-400 border border-green-700/50' 
+                          : 'bg-red-900/50 text-red-400 border border-red-700/50'
+                      }`}>
+                        {member.activity_status || 'inactive'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
                       {member.item_level ? (
                         <span className={`font-medium ${
                           member.item_level >= 650 ? 'text-purple-400' :
@@ -239,6 +254,15 @@ function Dashboard() {
                           'text-zinc-400'
                         }`}>
                           {Math.round(member.mythic_plus_score)}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {member.raid_progress ? (
+                        <span className="text-amber-400 font-medium">
+                          {member.raid_progress}
                         </span>
                       ) : (
                         <span className="text-zinc-500">-</span>

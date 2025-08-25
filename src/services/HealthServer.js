@@ -187,12 +187,23 @@ class HealthServer {
   "count": 168,
   "members": [
     {
+      // Guild Discovery Data (6h)
       "character_name": "Critter",
       "realm": "Archimonde", 
       "class": "Mage",
       "level": 80,
+      "last_login_timestamp": 1724421578000,
+      "activity_status": "active",
+      "last_activity_check": "2025-08-23T21:39:38.000Z",
+      
+      // Hourly Sync Data (active characters only - logged in within last 30 days)
       "item_level": 676,
       "mythic_plus_score": 3198,
+      "current_saison": "season-tww-1",
+      "raid_progress": "4/8 H",
+      "last_hourly_check": "2025-08-24T11:12:34.000Z",
+      
+      // Metadata
       "last_updated": "2025-08-22T10:39:38.000Z"
     }
   ]
@@ -216,36 +227,14 @@ class HealthServer {
                         <p class="text-zinc-300">Prometheus metrics endpoint for monitoring and alerting</p>
                     </div>
 
-                    <div class="bg-zinc-800 border border-green-700 rounded-lg p-4">
+                    <div class="bg-zinc-800 border border-zinc-700 rounded-lg p-4">
                         <div class="flex items-center gap-2 mb-2">
-                            <span class="bg-green-600 text-white px-2 py-1 rounded text-xs font-bold">POST</span>
-                            <code class="text-[#69ccf0]">/api/discover</code>
+                            <span class="bg-green-600 text-white px-2 py-1 rounded text-xs font-bold">GET</span>
+                            <code class="text-[#69ccf0]">/api/errors</code>
                         </div>
-                        <p class="text-zinc-300 mb-3">🔍 Manually trigger guild member discovery</p>
-                        <div class="bg-zinc-950 p-3 rounded border border-green-700">
-                            <pre class="text-sm text-green-300"><code>curl -X POST http://localhost:3001/api/discover</code></pre>
-                        </div>
-                    </div>
-
-                    <div class="bg-zinc-800 border border-purple-700 rounded-lg p-4">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="bg-purple-600 text-white px-2 py-1 rounded text-xs font-bold">POST</span>
-                            <code class="text-[#69ccf0]">/api/force-sync</code>
-                        </div>
-                        <p class="text-zinc-300 mb-3">⚡ Force sync all character data (item levels, M+ scores, PvP ratings)</p>
-                        <div class="bg-zinc-950 p-3 rounded border border-purple-700">
-                            <pre class="text-sm text-purple-300"><code>curl -X POST http://localhost:3001/api/force-sync</code></pre>
-                        </div>
-                    </div>
-
-                    <div class="bg-zinc-800 border border-red-700 rounded-lg p-4">
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="bg-red-600 text-white px-2 py-1 rounded text-xs font-bold">POST</span>
-                            <code class="text-[#69ccf0]">/api/reset</code>
-                        </div>
-                        <p class="text-zinc-300 mb-3">🗑️ Reset all guild member data (Auto-triggers discovery after reset)</p>
-                        <div class="bg-zinc-950 p-3 rounded border border-red-700">
-                            <pre class="text-sm text-red-300"><code>curl -X POST http://localhost:3001/api/reset</code></pre>
+                        <p class="text-zinc-300 mb-3">🚨 Get recent sync errors and error statistics</p>
+                        <div class="bg-zinc-950 p-3 rounded border border-zinc-700">
+                            <pre class="text-sm text-zinc-300"><code>curl http://localhost:3001/api/errors</code></pre>
                         </div>
                     </div>
                 </div>
@@ -304,13 +293,24 @@ class HealthServer {
               members: 'array - Array of guild member objects'
             },
             member_object: {
+              // Guild Discovery Data (every 6 hours)
               character_name: 'string - Character name',
               realm: 'string - Server realm',
               class: 'string - Character class (e.g., Warrior, Mage)',
               level: 'number - Character level (1-80)',
+              last_login_timestamp: 'number - Unix timestamp of last login',
+              activity_status: 'string - Player activity status (active, inactive). Active = logged in within last 30 days',
+              last_activity_check: 'string - ISO timestamp when activity was last checked',
+              
+              // Hourly Sync Data (active characters only - logged in within last 30 days)
               item_level: 'number - Average item level',
               mythic_plus_score: 'number - Mythic+ rating score',
-              last_updated: 'string - ISO timestamp of last data sync'
+              current_saison: 'string - Current M+ season identifier (e.g., "season-tww-1")',
+              raid_progress: 'string - Current raid progress (e.g., "4/8 H")',
+              last_hourly_check: 'string - ISO timestamp when hourly sync data was last updated',
+              
+              // Metadata
+              last_updated: 'string - ISO timestamp of last character data sync'
             }
           },
           '/api/docs': {
@@ -328,12 +328,23 @@ class HealthServer {
         },
         examples: {
           member_object: {
+            // Guild Discovery Data (6h)
             character_name: 'Critter',
             realm: 'Archimonde',
             class: 'Death Knight',
             level: 80,
+            last_login_timestamp: 1724421578000,
+            activity_status: 'active',
+            last_activity_check: '2025-08-23T21:39:38.000Z',
+            
+            // Hourly Sync Data (active characters only - logged in within last 30 days)
             item_level: 676,
             mythic_plus_score: 3198,
+            current_saison: 'season-tww-1',
+            raid_progress: '4/8 H',
+            last_hourly_check: '2025-08-24T11:12:34.000Z',
+            
+            // Metadata
             last_updated: '2025-08-22T10:39:38.000Z'
           }
         }
