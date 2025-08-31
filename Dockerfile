@@ -26,7 +26,7 @@ FROM node:22-alpine AS runtime
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
 # Install runtime dependencies
-RUN apk add --no-cache sqlite tini
+RUN apk add --no-cache tini
 
 # Create non-root user
 RUN addgroup -g 1001 -S guilduser && \
@@ -42,8 +42,8 @@ COPY src ./src
 COPY prisma ./prisma
 COPY package.json ./
 
-# Create data directory for SQLite database
-RUN mkdir -p /app/data && \
+# Create logs directory and set ownership
+RUN mkdir -p /app/logs && \
     chown -R guilduser:guilduser /app
 
 # Switch to non-root user
@@ -57,7 +57,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 ENTRYPOINT ["/sbin/tini", "--"]
 
 # Start the service
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && exec node src/index.js"]
+CMD ["sh", "-c", "npx prisma db push && exec node src/index.js"]
 
 # Expose health check port (optional)
 EXPOSE 3001

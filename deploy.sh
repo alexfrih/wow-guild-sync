@@ -60,17 +60,8 @@ if [ ! -d "./data" ]; then
     print_success "Data directory created"
 fi
 
-# Backup existing database if it exists
-if [ -f "./data/guild-sync.db" ]; then
-    BACKUP_NAME="guild-sync-backup-$(date +%Y%m%d-%H%M%S).db"
-    print_status "Creating database backup: $BACKUP_NAME"
-    cp "./data/guild-sync.db" "./data/$BACKUP_NAME"
-    print_success "Database backed up"
-    
-    # Keep only last 5 backups
-    print_status "Cleaning old backups (keeping last 5)"
-    ls -t ./data/guild-sync-backup-*.db 2>/dev/null | tail -n +6 | xargs -r rm -- 2>/dev/null || true
-fi
+# Using external PostgreSQL (Neon) - no local database backups needed
+print_status "Using external PostgreSQL database (data persisted externally)"
 
 # Build React app with Vite
 print_status "Building React frontend with Vite..."
