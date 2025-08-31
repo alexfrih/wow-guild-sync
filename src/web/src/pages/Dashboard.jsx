@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
-import { AlertTriangle, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
+import { ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
 
 function Dashboard() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState(null);
   const [syncProgress, setSyncProgress] = useState(null);
-  const [errors, setErrors] = useState([]);
   const [sortConfig, setSortConfig] = useState({ 
     key: 'item_level', 
     direction: 'desc' 
@@ -15,7 +14,6 @@ function Dashboard() {
 
   useEffect(() => {
     fetchMembers();
-    fetchErrors();
     
     const socket = io();
     
@@ -33,8 +31,6 @@ function Dashboard() {
     socket.on('syncComplete', (data) => {
       console.log('✅ Sync completed:', data);
       setSyncProgress(null);
-      // Refresh errors after sync completes
-      fetchErrors();
     });
 
     // New handlers for missing data sync and real-time updates
@@ -151,23 +147,7 @@ function Dashboard() {
     }
   };
 
-  const fetchErrors = async () => {
-    try {
-      const response = await fetch('/api/errors?limit=50');
-      const data = await response.json();
-      setErrors(data.errors || []);
-    } catch (error) {
-      console.error('Failed to fetch errors:', error);
-    }
-  };
 
-  const hasRecentError = (characterName) => {
-    const recent = new Date(Date.now() - 24 * 60 * 60 * 1000); // Last 24 hours
-    return errors.some(error => 
-      error.character_name === characterName && 
-      new Date(error.timestamp) > recent
-    );
-  };
 
   const getArmoryLink = (characterName, realm) => {
     return `https://worldofwarcraft.blizzard.com/en-us/character/eu/${realm}/${characterName}`;
@@ -209,7 +189,7 @@ function Dashboard() {
         
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-orange-500 mb-2">
+          <h1 className="text-4xl font-bold text-zinc-100 mb-2">
             🏰 Pool Party Guild ({sortedMembers.length} members)
           </h1>
           <p className="text-zinc-400 text-lg">Archimonde - EU</p>
@@ -219,7 +199,7 @@ function Dashboard() {
           <div className="mt-4 flex justify-center space-x-4 text-sm">
             <span className="bg-zinc-800 px-3 py-1 rounded">
               <span className="text-zinc-400">Members:</span>{' '}
-              <span className="text-orange-500 font-semibold">{members.length}</span>
+              <span className="text-zinc-100 font-semibold">{members.length}</span>
             </span>
             {syncProgress && (
               <span className="bg-blue-900/50 px-3 py-1 rounded border border-blue-700">
@@ -366,6 +346,15 @@ function Dashboard() {
                   </th>
                   <th 
                     className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
+                    onClick={() => handleSort('rbg_shuffle_rating')}
+                  >
+                    <div className="flex items-center gap-1">
+                      RBG Blitz
+                      {getSortIcon('rbg_shuffle_rating')}
+                    </div>
+                  </th>
+                  <th 
+                    className="px-6 py-4 text-left text-xs font-medium text-zinc-300 uppercase tracking-wider cursor-pointer hover:bg-zinc-800/50 select-none"
                     onClick={() => handleSort('last_updated')}
                   >
                     <div className="flex items-center gap-1">
@@ -390,14 +379,11 @@ function Dashboard() {
                           </span>
                         </div>
                         <div className="flex items-center space-x-1">
-                          {hasRecentError(member.character_name) && (
-                            <AlertTriangle className="w-4 h-4 text-red-400" title="Recent sync error" />
-                          )}
                           <a
                             href={getArmoryLink(member.character_name, member.realm)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-zinc-400 hover:text-orange-400 transition-colors"
+                            className="text-zinc-400 hover:text-zinc-300 transition-colors"
                             title="View on Armory"
                           >
                             <ExternalLink className="w-4 h-4" />
@@ -534,6 +520,21 @@ function Dashboard() {
                           'text-zinc-400'
                         }`}>
                           {member.solo_shuffle_rating}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {member.rbg_shuffle_rating && member.rbg_shuffle_rating > 0 ? (
+                        <span className={`font-medium ${
+                          member.rbg_shuffle_rating >= 2400 ? 'text-purple-400' :
+                          member.rbg_shuffle_rating >= 2100 ? 'text-orange-400' :
+                          member.rbg_shuffle_rating >= 1800 ? 'text-blue-400' :
+                          member.rbg_shuffle_rating >= 1500 ? 'text-green-400' :
+                          'text-zinc-400'
+                        }`}>
+                          {member.rbg_shuffle_rating}
                         </span>
                       ) : (
                         <span className="text-zinc-500">-</span>

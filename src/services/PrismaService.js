@@ -48,6 +48,7 @@ class PrismaService {
         achievement_points: member.achievement_points || 0,
         solo_shuffle_rating: member.solo_shuffle_rating || 0,
         max_solo_shuffle_rating: member.max_solo_shuffle_rating || 0,
+        rbg_shuffle_rating: member.rbg_shuffle_rating || 0,
         last_hourly_check: member.mythic_plus_score !== undefined || member.item_level !== undefined || member.raid_progress !== undefined ? new Date() : undefined,
         last_updated: new Date(),
       },
@@ -67,6 +68,7 @@ class PrismaService {
         achievement_points: member.achievement_points || 0,
         solo_shuffle_rating: member.solo_shuffle_rating || 0,
         max_solo_shuffle_rating: member.max_solo_shuffle_rating || 0,
+        rbg_shuffle_rating: member.rbg_shuffle_rating || 0,
         last_hourly_check: member.mythic_plus_score !== undefined || member.item_level !== undefined || member.raid_progress !== undefined ? new Date() : undefined,
       },
     });

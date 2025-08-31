@@ -10,7 +10,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:/app/data/guild_members.db"
+  url      = "file:./guild_members.db"
 }
 
 model GuildMember {
@@ -32,6 +32,9 @@ model GuildMember {
   // Solo Shuffle (separate specialization)
   solo_shuffle_rating Int?    @default(0)
   max_solo_shuffle_rating Int? @default(0)
+  
+  // RBG Shuffle (Blitz mode)
+  rbg_shuffle_rating Int?     @default(0)
   
   // Achievement Points
   achievement_points Int?     @default(0)
