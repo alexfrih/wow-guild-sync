@@ -253,21 +253,24 @@ class ExternalApiService {
         const pvp2v2Response = await axios.get(`${baseUrl}/pvp-bracket/2v2?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        pvp2v2Rating = pvp2v2Response.data.rating || 0;
+        // Only use rating if it's from current season (40)
+        pvp2v2Rating = (pvp2v2Response.data.season?.id === 40) ? (pvp2v2Response.data.rating || 0) : 0;
       } catch { pvp2v2Rating = 0; }
       
       try {
         const pvp3v3Response = await axios.get(`${baseUrl}/pvp-bracket/3v3?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        pvp3v3Rating = pvp3v3Response.data.rating || 0;
+        // Only use rating if it's from current season (40)
+        pvp3v3Rating = (pvp3v3Response.data.season?.id === 40) ? (pvp3v3Response.data.rating || 0) : 0;
       } catch { pvp3v3Rating = 0; }
       
       try {
         const pvpRbgResponse = await axios.get(`${baseUrl}/pvp-bracket/rbg?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        pvpRbgRating = pvpRbgResponse.data.rating || 0;
+        // Only use rating if it's from current season (40)
+        pvpRbgRating = (pvpRbgResponse.data.season?.id === 40) ? (pvpRbgResponse.data.rating || 0) : 0;
       } catch { pvpRbgRating = 0; }
       
       // Get Solo Shuffle and RBG Blitz ratings by checking PvP summary
@@ -430,21 +433,24 @@ class ExternalApiService {
         const pvp2v2Response = await axios.get(`${baseUrl}/pvp-bracket/2v2?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        pvp2v2Rating = pvp2v2Response.data.rating || 0;
+        // Only use rating if it's from current season (40)
+        pvp2v2Rating = (pvp2v2Response.data.season?.id === 40) ? (pvp2v2Response.data.rating || 0) : 0;
       } catch { pvp2v2Rating = 0; }
       
       try {
         const pvp3v3Response = await axios.get(`${baseUrl}/pvp-bracket/3v3?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        pvp3v3Rating = pvp3v3Response.data.rating || 0;
+        // Only use rating if it's from current season (40)
+        pvp3v3Rating = (pvp3v3Response.data.season?.id === 40) ? (pvp3v3Response.data.rating || 0) : 0;
       } catch { pvp3v3Rating = 0; }
       
       try {
         const pvpRbgResponse = await axios.get(`${baseUrl}/pvp-bracket/rbg?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        pvpRbgRating = pvpRbgResponse.data.rating || 0;
+        // Only use rating if it's from current season (40)
+        pvpRbgRating = (pvpRbgResponse.data.season?.id === 40) ? (pvpRbgResponse.data.rating || 0) : 0;
       } catch { pvpRbgRating = 0; }
 
       currentPvpRating = Math.max(pvp2v2Rating, pvp3v3Rating, pvpRbgRating);
