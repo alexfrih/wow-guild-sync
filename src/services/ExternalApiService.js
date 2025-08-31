@@ -301,8 +301,9 @@ class ExternalApiService {
               const shuffleResponse = await axios.get(`${bracket.href}&locale=en_US`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
-              const rating = shuffleResponse.data.rating || 0;
-              const maxRating = shuffleResponse.data.season_best_rating || rating;
+              // Only use rating if it's from current season (40)
+              const rating = (shuffleResponse.data.season?.id === 40) ? (shuffleResponse.data.rating || 0) : 0;
+              const maxRating = (shuffleResponse.data.season?.id === 40) ? (shuffleResponse.data.season_best_rating || rating) : 0;
               
               if (rating > highestRating) {
                 highestRating = rating;
@@ -331,7 +332,8 @@ class ExternalApiService {
               const blitzResponse = await axios.get(`${bracket.href}&locale=en_US`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
-              const rating = blitzResponse.data.rating || 0;
+              // Only use rating if it's from current season (40)
+              const rating = (blitzResponse.data.season?.id === 40) ? (blitzResponse.data.rating || 0) : 0;
               
               if (rating > highestBlitzRating) {
                 highestBlitzRating = rating;
@@ -476,8 +478,9 @@ class ExternalApiService {
               const shuffleResponse = await axios.get(`${bracket.href}&locale=en_US`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
-              const rating = shuffleResponse.data.rating || 0;
-              const maxRating = shuffleResponse.data.season_best_rating || rating;
+              // Only use rating if it's from current season (40)
+              const rating = (shuffleResponse.data.season?.id === 40) ? (shuffleResponse.data.rating || 0) : 0;
+              const maxRating = (shuffleResponse.data.season?.id === 40) ? (shuffleResponse.data.season_best_rating || rating) : 0;
               
               if (rating > highestRating) {
                 highestRating = rating;
