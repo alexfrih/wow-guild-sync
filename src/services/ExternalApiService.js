@@ -16,7 +16,8 @@ class ExternalApiService {
   // ============================================================================
   
   async getBlizzardToken() {
-    if (this.blizzardToken) {
+    // Check if token exists and is not expired
+    if (this.blizzardToken && this.tokenExpiry && Date.now() < this.tokenExpiry) {
       return this.blizzardToken;
     }
 
@@ -35,6 +36,8 @@ class ExternalApiService {
       );
 
       this.blizzardToken = response.data.access_token;
+      // Set expiry to 1 hour (tokens typically last longer, but this ensures refresh)
+      this.tokenExpiry = Date.now() + (60 * 60 * 1000);
       this.logger.info('✅ Blizzard API token obtained');
       return this.blizzardToken;
     } catch (error) {
@@ -253,24 +256,24 @@ class ExternalApiService {
         const pvp2v2Response = await axios.get(`${baseUrl}/pvp-bracket/2v2?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        // Only use rating if it's from current season (40)
-        pvp2v2Rating = (pvp2v2Response.data.season?.id === 40) ? (pvp2v2Response.data.rating || 0) : 0;
+        // Use rating from any season (Blizzard API returns current season data by default)
+        pvp2v2Rating = pvp2v2Response.data.rating || 0;
       } catch { pvp2v2Rating = 0; }
       
       try {
         const pvp3v3Response = await axios.get(`${baseUrl}/pvp-bracket/3v3?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        // Only use rating if it's from current season (40)
-        pvp3v3Rating = (pvp3v3Response.data.season?.id === 40) ? (pvp3v3Response.data.rating || 0) : 0;
+        // Use rating from any season (Blizzard API returns current season data by default)
+        pvp3v3Rating = pvp3v3Response.data.rating || 0;
       } catch { pvp3v3Rating = 0; }
       
       try {
         const pvpRbgResponse = await axios.get(`${baseUrl}/pvp-bracket/rbg?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        // Only use rating if it's from current season (40)
-        pvpRbgRating = (pvpRbgResponse.data.season?.id === 40) ? (pvpRbgResponse.data.rating || 0) : 0;
+        // Use rating from any season (Blizzard API returns current season data by default)
+        pvpRbgRating = pvpRbgResponse.data.rating || 0;
       } catch { pvpRbgRating = 0; }
       
       // Get Solo Shuffle and RBG Blitz ratings by checking PvP summary
@@ -301,9 +304,9 @@ class ExternalApiService {
               const shuffleResponse = await axios.get(`${bracket.href}&locale=en_US`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
-              // Only use rating if it's from current season (40)
-              const rating = (shuffleResponse.data.season?.id === 40) ? (shuffleResponse.data.rating || 0) : 0;
-              const maxRating = (shuffleResponse.data.season?.id === 40) ? (shuffleResponse.data.season_best_rating || rating) : 0;
+              // Use rating from any season (Blizzard API returns current season data by default)
+              const rating = shuffleResponse.data.rating || 0;
+              const maxRating = shuffleResponse.data.season_best_rating || rating;
               
               if (rating > highestRating) {
                 highestRating = rating;
@@ -332,7 +335,7 @@ class ExternalApiService {
               const blitzResponse = await axios.get(`${bracket.href}&locale=en_US`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
-              // Only use rating if it's from current season (40)
+              // Use rating from any season (Blizzard API returns current season data by default)
               const rating = (blitzResponse.data.season?.id === 40) ? (blitzResponse.data.rating || 0) : 0;
               
               if (rating > highestBlitzRating) {
@@ -435,24 +438,24 @@ class ExternalApiService {
         const pvp2v2Response = await axios.get(`${baseUrl}/pvp-bracket/2v2?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        // Only use rating if it's from current season (40)
-        pvp2v2Rating = (pvp2v2Response.data.season?.id === 40) ? (pvp2v2Response.data.rating || 0) : 0;
+        // Use rating from any season (Blizzard API returns current season data by default)
+        pvp2v2Rating = pvp2v2Response.data.rating || 0;
       } catch { pvp2v2Rating = 0; }
       
       try {
         const pvp3v3Response = await axios.get(`${baseUrl}/pvp-bracket/3v3?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        // Only use rating if it's from current season (40)
-        pvp3v3Rating = (pvp3v3Response.data.season?.id === 40) ? (pvp3v3Response.data.rating || 0) : 0;
+        // Use rating from any season (Blizzard API returns current season data by default)
+        pvp3v3Rating = pvp3v3Response.data.rating || 0;
       } catch { pvp3v3Rating = 0; }
       
       try {
         const pvpRbgResponse = await axios.get(`${baseUrl}/pvp-bracket/rbg?namespace=profile-${region}&locale=en_US`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        // Only use rating if it's from current season (40)
-        pvpRbgRating = (pvpRbgResponse.data.season?.id === 40) ? (pvpRbgResponse.data.rating || 0) : 0;
+        // Use rating from any season (Blizzard API returns current season data by default)
+        pvpRbgRating = pvpRbgResponse.data.rating || 0;
       } catch { pvpRbgRating = 0; }
 
       currentPvpRating = Math.max(pvp2v2Rating, pvp3v3Rating, pvpRbgRating);
@@ -478,9 +481,9 @@ class ExternalApiService {
               const shuffleResponse = await axios.get(`${bracket.href}&locale=en_US`, {
                 headers: { 'Authorization': `Bearer ${token}` }
               });
-              // Only use rating if it's from current season (40)
-              const rating = (shuffleResponse.data.season?.id === 40) ? (shuffleResponse.data.rating || 0) : 0;
-              const maxRating = (shuffleResponse.data.season?.id === 40) ? (shuffleResponse.data.season_best_rating || rating) : 0;
+              // Use rating from any season (Blizzard API returns current season data by default)
+              const rating = shuffleResponse.data.rating || 0;
+              const maxRating = shuffleResponse.data.season_best_rating || rating;
               
               if (rating > highestRating) {
                 highestRating = rating;
