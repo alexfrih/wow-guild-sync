@@ -6,6 +6,7 @@ const cron = require('node-cron');
 const PrismaService = require('./PrismaService');
 const ExternalApiService = require('./ExternalApiService');
 const WebApiService = require('./WebApiService');
+const EmailService = require('./EmailService');
 const Logger = require('../utils/Logger');
 
 class GuildSyncService {
@@ -22,11 +23,13 @@ class GuildSyncService {
       lastFullSync: null,
       lastSyncDuration: null
     };
+    this.recentErrors = []; // Track recent sync errors for reporting
 
     // Initialize services
     this.db = new PrismaService();
     this.externalApi = new ExternalApiService(config, Logger);
     this.webApi = new WebApiService(config, Logger);
+    this.emailService = new EmailService(config);
 
     // Cron jobs for two-tier sync system
     this.guildDiscoveryJob = null;
@@ -44,6 +47,16 @@ class GuildSyncService {
       // Clean up any duplicates from previous runs
       await this.db.cleanupDuplicates();
       Logger.info('🧹 Cleaned up duplicate entries');
+
+      // Test email configuration if enabled
+      if (this.emailService.isEnabled) {
+        Logger.info('📧 Testing email notification configuration...');
+        try {
+          await this.emailService.sendTestEmail();
+        } catch (error) {
+          Logger.warn('⚠️ Email test failed - notifications may not work:', error.message);
+        }
+      }
 
       // Set service as running before first sync
       this.isRunning = true;
@@ -201,7 +214,13 @@ class GuildSyncService {
     } catch (error) {
       Logger.error('❌ Guild discovery failed:', error.message || error);
       this.stats.totalErrors++;
-      
+
+      // Send critical error notification
+      await this.emailService.sendCriticalErrorNotification(error, {
+        syncType: 'Guild Discovery',
+        timestamp: new Date().toISOString()
+      });
+
       if (global.io) {
         global.io.emit('discoveryError', {
           message: `Guild discovery failed: ${error.message}`,
@@ -250,6 +269,7 @@ class GuildSyncService {
       // Step 2: Sync each active character
       let syncedCount = 0;
       let errorCount = 0;
+      this.recentErrors = []; // Clear previous errors
 
       for (let i = 0; i < activeMembers.length; i++) {
         if (!this.isRunning) break;
@@ -295,6 +315,10 @@ class GuildSyncService {
           } else {
             errorCount++;
             this.stats.totalErrors++;
+            this.recentErrors.push({
+              character: member.character_name,
+              message: 'No data returned from API'
+            });
             Logger.warn(`⚠️ [${this.syncProgress.current}/${this.syncProgress.total}] ${member.character_name} - no data returned`);
           }
 
@@ -302,6 +326,12 @@ class GuildSyncService {
           errorCount++;
           this.stats.totalErrors++;
           this.syncProgress.errors = errorCount;
+
+          // Track error details
+          this.recentErrors.push({
+            character: member.character_name,
+            message: error.message || 'Unknown error'
+          });
 
           Logger.error(`❌ [${this.syncProgress.current}/${this.syncProgress.total}] Error syncing ${member.character_name}: ${error.message}`);
         }
@@ -327,11 +357,27 @@ class GuildSyncService {
       // Step 3: Complete sync
       const syncEndTime = new Date();
       const duration = Math.round((syncEndTime - syncStartTime) / 1000);
-      
+
       this.stats.lastFullSync = syncEndTime;
       this.stats.lastSyncDuration = duration;
 
       Logger.info(`🎉 Active sync completed: ${syncedCount} synced, ${errorCount} errors (${duration}s)`);
+
+      // Send error notification if there were significant errors
+      if (errorCount > 0) {
+        const errorRate = (errorCount / activeMembers.length) * 100;
+        if (errorRate > 10 || errorCount > 5) { // More than 10% errors or more than 5 errors
+          const errorDetails = {
+            syncType: 'Active Character Sync',
+            errorCount: errorCount,
+            totalCount: activeMembers.length,
+            duration: duration,
+            errors: this.recentErrors,
+            timestamp: new Date().toISOString()
+          };
+          await this.emailService.sendSyncErrorNotification(errorDetails);
+        }
+      }
 
       // Emit completion
       if (global.io) {
@@ -348,7 +394,13 @@ class GuildSyncService {
     } catch (error) {
       Logger.error('❌ Active character sync failed:', error.message || error);
       this.stats.totalErrors++;
-      
+
+      // Send critical error notification
+      await this.emailService.sendCriticalErrorNotification(error, {
+        syncType: 'Active Character Sync',
+        timestamp: new Date().toISOString()
+      });
+
       if (global.io) {
         global.io.emit('syncError', {
           message: `Active sync failed: ${error.message}`,

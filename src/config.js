@@ -60,7 +60,15 @@ const config = {
     maxBackoffMs: 300000,
     concurrency: 1,
     memoryLimit: '512m'
-  }
+  },
+
+  mailgun: {
+    apiKey: process.env.MAILGUN_API_KEY,
+    domain: process.env.MAILGUN_DOMAIN,
+    apiUrl: 'https://api.eu.mailgun.net' // Use EU region
+  },
+
+  contactEmail: process.env.CONTACT_EMAIL || 'admin@example.com'
 };
 
 function validateConfig() {
