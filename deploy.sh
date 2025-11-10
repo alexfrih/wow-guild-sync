@@ -60,8 +60,19 @@ if [ ! -d "./data" ]; then
     print_success "Data directory created"
 fi
 
-# Using external PostgreSQL (Neon) - no local database backups needed
-print_status "Using external PostgreSQL database (data persisted externally)"
+# Backup SQLite database before deployment
+if [ -f "./data/guild-sync.db" ]; then
+    BACKUP_FILE="./data/guild-sync.db.backup-$(date +%Y%m%d-%H%M%S)"
+    print_status "Backing up SQLite database..."
+    cp ./data/guild-sync.db "$BACKUP_FILE"
+    print_success "Database backed up to: $BACKUP_FILE"
+
+    # Keep only last 5 backups
+    print_status "Cleaning up old backups (keeping last 5)..."
+    ls -t ./data/guild-sync.db.backup-* 2>/dev/null | tail -n +6 | xargs rm -f 2>/dev/null || true
+else
+    print_status "No existing SQLite database found (will be created on first run)"
+fi
 
 # Build React app with Vite
 print_status "Building React frontend with Vite..."

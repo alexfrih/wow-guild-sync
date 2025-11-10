@@ -42,8 +42,8 @@ COPY src ./src
 COPY prisma ./prisma
 COPY package.json ./
 
-# Create logs directory and set ownership
-RUN mkdir -p /app/logs && \
+# Create logs and data directories and set ownership
+RUN mkdir -p /app/logs /app/data && \
     chown -R guilduser:guilduser /app
 
 # Switch to non-root user
