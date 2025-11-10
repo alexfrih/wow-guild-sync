@@ -18,6 +18,26 @@ WoW Guild Sync is an autonomous synchronization service that fetches World of Wa
 1. **Guild Discovery** (every 6 hours): Discovers new members, updates activity status based on last login timestamps
 2. **Active Character Sync** (every 30 minutes): Deep sync for recently active members (item level, M+ score, PvP ratings, achievements, raid progress)
 
+## Recent Changes (2025-11)
+
+**Database Migration: PostgreSQL → SQLite**
+- Migrated from external PostgreSQL (Neon) to local SQLite for simplified deployment and better performance
+- Database file location: `./data/guild-sync.db` (persisted via Docker volume)
+- `docker-compose.yml` explicitly sets `DATABASE_URL=file:/app/data/guild-sync.db` to override any stale environment variables
+- Dockerfile includes `--accept-data-loss` flag for automatic schema migrations during container startup
+- Deploy script (`deploy.sh`) now includes automatic SQLite database backups before each deployment (keeps last 5 backups)
+
+**Schema Changes:**
+- Replaced `is_active` boolean column with `activity_status` string field ('active'/'inactive')
+- Activity status is automatically re-synced from Blizzard API on next sync cycle
+- Prisma automatically handles schema migrations on container startup with data loss acceptance
+
+**Production Deployment Notes:**
+- Ensure `.env` file on production server has `DATABASE_URL=file:/app/data/guild-sync.db`
+- Run `git pull && ./deploy.sh` to deploy with automatic backups
+- Database persists in `./data/` directory on host machine
+- Old backups are automatically cleaned up (keeps 5 most recent)
+
 ## Development Commands
 
 **Local Development:**
@@ -47,7 +67,8 @@ npm run compose:logs     # Docker compose logs -f
 
 **Production Deployment:**
 ```bash
-./deploy.sh              # Handles frontend build, backups, health checks
+./deploy.sh              # Handles frontend build, SQLite backups, Docker rebuild, health checks
+                         # Automatically backs up database before deployment (keeps last 5)
 ```
 
 **Database:**
@@ -113,15 +134,19 @@ npm run build
 
 ## Database Schema
 
-**GuildMember**: Primary model storing character data (name, realm, class, level, item_level, mythic_plus_score, pvp ratings, achievement_points, raid_progress, activity_status, timestamps)
+**GuildMember**: Primary model storing character data
+- Core fields: `character_name`, `realm`, `class`, `level`, `item_level`
+- PvP ratings: `pvp_2v2_rating`, `pvp_3v3_rating`, `pvp_rbg_rating`, `solo_shuffle_rating`, `rbg_shuffle_rating`
+- M+ data: `mythic_plus_score`, `current_saison`
+- Activity tracking: `activity_status` ('active'/'inactive'), `last_login_timestamp`, `last_activity_check`, `last_hourly_check`
+- Other: `achievement_points`, `raid_progress` (JSON string)
+- Unique constraint: `[character_name, realm]`
 
-**SyncLog**: Sync operation history
+**SyncLog**: Sync operation history (timestamp, status, message, character_name)
 
-**SyncError**: Detailed error tracking for API failures
+**SyncError**: Detailed error tracking for API failures (character_name, realm, error_type, service, url_attempted, timestamp)
 
-**DatabaseVersion**: Migration tracking
-
-Unique constraint: `[character_name, realm]`
+**DatabaseVersion**: Migration tracking (version, applied_at, description)
 
 ## Common Patterns
 
@@ -133,10 +158,11 @@ Unique constraint: `[character_name, realm]`
 
 **Adding a new field to GuildMember:**
 1. Update Prisma schema in `prisma/schema.prisma`
-2. Run `npx prisma db push` to apply changes to SQLite database
+2. Run `npx prisma db push --accept-data-loss` to apply changes to SQLite database (use --accept-data-loss for breaking changes)
 3. Update `ExternalApiService` to fetch the data
 4. Update `GuildSyncService` to process and store the data
 5. Regenerate Prisma client: `npx prisma generate`
+6. Note: Docker container automatically runs `npx prisma db push --accept-data-loss` on startup
 
 **Debugging sync issues:**
 1. Check logs: `docker-compose logs -f`
