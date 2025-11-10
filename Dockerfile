@@ -57,7 +57,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 ENTRYPOINT ["/sbin/tini", "--"]
 
 # Start the service
-CMD ["sh", "-c", "npx prisma db push && exec node src/index.js"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && exec node src/index.js"]
 
 # Expose health check port (optional)
 EXPOSE 3001
