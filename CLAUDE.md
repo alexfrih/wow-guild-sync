@@ -18,26 +18,6 @@ WoW Guild Sync is an autonomous synchronization service that fetches World of Wa
 1. **Guild Discovery** (every 6 hours): Discovers new members, updates activity status based on last login timestamps
 2. **Active Character Sync** (every 30 minutes): Deep sync for recently active members (item level, M+ score, PvP ratings, achievements, raid progress)
 
-## Recent Changes (2025-11)
-
-**Database Migration: PostgreSQL → SQLite**
-- Migrated from external PostgreSQL (Neon) to local SQLite for simplified deployment and better performance
-- Database file location: `./data/guild-sync.db` (persisted via Docker volume)
-- `docker-compose.yml` explicitly sets `DATABASE_URL=file:/app/data/guild-sync.db` to override any stale environment variables
-- Dockerfile includes `--accept-data-loss` flag for automatic schema migrations during container startup
-- Deploy script (`deploy.sh`) now includes automatic SQLite database backups before each deployment (keeps last 5 backups)
-
-**Schema Changes:**
-- Replaced `is_active` boolean column with `activity_status` string field ('active'/'inactive')
-- Activity status is automatically re-synced from Blizzard API on next sync cycle
-- Prisma automatically handles schema migrations on container startup with data loss acceptance
-
-**Production Deployment Notes:**
-- Ensure `.env` file on production server has `DATABASE_URL=file:/app/data/guild-sync.db`
-- Run `git pull && ./deploy.sh` to deploy with automatic backups
-- Database persists in `./data/` directory on host machine
-- Old backups are automatically cleaned up (keeps 5 most recent)
-
 ## Development Commands
 
 **Local Development:**
